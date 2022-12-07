@@ -24,6 +24,10 @@ const char* shmem_reason_names[] = {
    "dram-queue",
    "dram-bus",
    "dram-device",
+   "mme",
+   "vn-queue",
+   "vn-device",
+   "mme-device",
    "unknown",
 };
 

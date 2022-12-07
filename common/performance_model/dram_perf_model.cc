@@ -23,17 +23,7 @@ DramPerfModel* DramPerfModel::createDramPerfModel(core_id_t core_id, UInt32 cach
    }
 
    if (mme_enable){
-       DramPerfModel* vn_model = NULL;
-       if (type == "constant") {
-           vn_model = new DramPerfModelConstant(core_id, cache_block_size);
-       } else if (type == "readwrite") {
-           vn_model = new DramPerfModelReadWrite(core_id, cache_block_size);
-       } else if (type == "normal") {
-           vn_model = new DramPerfModelNormal(core_id, cache_block_size);
-       } else {
-           LOG_PRINT_ERROR("Invalid DRAM model type %s", type.c_str());
-       }
-       return new DramPerfModelMME(core_id, cache_block_size, dram_model, vn_model);
+       return new DramPerfModelMME(core_id, cache_block_size, dram_model);
    } else {
        return dram_model;
    }

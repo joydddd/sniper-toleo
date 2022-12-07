@@ -15,6 +15,8 @@ class vnServerPerfModel
     public : vnServerPerfModel();
      ~vnServerPerfModel() {}
 
+     static const uint32_t vn_request_width = 128; // each vn request is 128bits. 
+
      enum vnActions_t { GET_VERSION_NUMBER, UPDATE_VERSION_NUMBER };
 
      SubsecondTime getLatency(vnActions_t action);

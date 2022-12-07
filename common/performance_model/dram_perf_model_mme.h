@@ -11,15 +11,23 @@
 class DramPerfModelMME : public DramPerfModel {
    private:
     DramPerfModel* mme_dram_model;
-    DramPerfModel* vn_machine_model;
+    QueueModel* mme_queue_model;
     vnServerPerfModel* vn_server;
 
+    ComponentBandwidth mme_vn_bandwidth;
     SubsecondTime mme_mult_delay;
     SubsecondTime mme_aes_delay;
 
+    SubsecondTime mme_total_vn_delay;
+    SubsecondTime mme_total_access_latency;
+
+    SubsecondTime getvnLatency(
+        SubsecondTime pkt_time, core_id_t requester, IntPtr address,
+        vnServerPerfModel::vnActions_t access_type, ShmemPerf* perf);
+
    public:
     DramPerfModelMME(core_id_t core_id,
-                     UInt32 cache_block_size, DramPerfModel* dram_model, DramPerfModel *vn_model);
+                     UInt32 cache_block_size, DramPerfModel* dram_model);
 
     ~DramPerfModelMME();
 

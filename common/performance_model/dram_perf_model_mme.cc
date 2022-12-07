@@ -3,13 +3,19 @@
 #include "config.h"
 #include "config.hpp"
 #include "subsecond_time.h"
+#include "stats.h"
+#include "shmem_perf.h"
 
 DramPerfModelMME::DramPerfModelMME(core_id_t core_id, UInt32 cache_block_size,
-                                   DramPerfModel* dram_model,
-                                   DramPerfModel* vn_model)
+                                   DramPerfModel* dram_model)
     : DramPerfModel(core_id, cache_block_size),
       mme_dram_model(dram_model),
-      vn_machine_model(vn_model),
+      mme_queue_model(NULL),
+      vn_server(NULL),
+      mme_vn_bandwidth(
+          Sim()->getCfg()->getFloat("perf_model/mme/per_mme_bandwidth") *
+          vnServerPerfModel::vn_request_width),  // In terms of vn channel
+                                                 // bandwidth.
       mme_mult_delay(
           SubsecondTime::FS() *
           static_cast<uint64_t>(TimeConverter<float>::NStoFS(
@@ -17,78 +23,141 @@ DramPerfModelMME::DramPerfModelMME(core_id_t core_id, UInt32 cache_block_size,
       mme_aes_delay(
           SubsecondTime::FS() *
           static_cast<uint64_t>(TimeConverter<float>::NStoFS(
-              Sim()->getCfg()->getFloat("perf_model/mme/aes_latency"))))
+              Sim()->getCfg()->getFloat("perf_model/mme/aes_latency")))),
+      mme_total_vn_delay(SubsecondTime::Zero()),
+      mme_total_access_latency(SubsecondTime::Zero())
 
 {
     vn_server = new vnServerPerfModel();
+    if (Sim()->getCfg()->getBool("perf_model/mme/queue_model/enabled")){
+        mme_queue_model = QueueModel::create(
+            "vn-queue", core_id,
+            Sim()->getCfg()->getString("perf_model/mme/queue_model/type"),
+            mme_vn_bandwidth.getRoundedLatency(
+                vnServerPerfModel::vn_request_width));
+    }
+
+    registerStatsMetric("mme", core_id, "total-access-latency",
+                        &mme_total_access_latency);
+    registerStatsMetric("mme", core_id, "total-vn-delay",
+                        &mme_total_vn_delay);
 }
 
 DramPerfModelMME::~DramPerfModelMME(){
     delete mme_dram_model;
     delete vn_server;
-    delete vn_machine_model;
+    if (mme_queue_model)
+    {
+        delete mme_queue_model;
+        mme_queue_model = NULL;
+    }
+}
+
+SubsecondTime DramPerfModelMME::getvnLatency(
+    SubsecondTime pkt_time, core_id_t requester, IntPtr address,
+    vnServerPerfModel::vnActions_t access_type, ShmemPerf *perf) {
+    SubsecondTime processing_time =
+        mme_vn_bandwidth.getRoundedLatency(vnServerPerfModel::vn_request_width);
+
+    // Compute Queue Delay
+    SubsecondTime queue_delay;
+    if (mme_queue_model)
+    {
+        queue_delay = mme_queue_model->computeQueueDelay(
+            pkt_time, processing_time, requester);
+    }
+    else 
+    {
+        queue_delay = SubsecondTime::Zero();
+    }
+
+    SubsecondTime vn_delay = vn_server->getLatency(access_type);
+
+    SubsecondTime checksum_delay = mme_mult_delay * 3; // nouce is calculated previously. 
+
+    SubsecondTime access_latency =
+        queue_delay + processing_time + vn_delay + checksum_delay;
+    
+    if (perf) {
+        perf->updateTime(pkt_time + queue_delay, ShmemPerf::VN_QUEUE);
+        perf->updateTime(pkt_time + access_latency, ShmemPerf::VN_DEVICE);
+    }
+
+    return access_latency;
 }
 
 SubsecondTime DramPerfModelMME::getAccessLatency(
     SubsecondTime pkt_time, UInt64 pkt_size, core_id_t requester,
     IntPtr address, DramCntlrInterface::access_t access_type, ShmemPerf* perf) {
 
-    
 
-    SubsecondTime vn_delay;
+    SubsecondTime vn_delay, cipher_delay, tag_delay, access_time;
     switch (access_type) {
-        case DramCntlrInterface::READ:
+        case DramCntlrInterface::READ:{
+            /* Access version number, cipher text and tag at the same time */
             vn_delay =
-                vn_server->getLatency(vnServerPerfModel::GET_VERSION_NUMBER);
-            break;
-        case DramCntlrInterface::WRITE:
-            vn_delay =
-                vn_server->getLatency(vnServerPerfModel::UPDATE_VERSION_NUMBER);
-            break;
-        default:
-            break;
-    }
-
-    /* Read Version Number */
-    vn_delay += vn_machine_model->getAccessLatency(
-        pkt_time, pkt_size, requester, address, DramCntlrInterface::READ, NULL);
-
-    /* Access Crpto data*/
-    SubsecondTime cipher_delay;
-    cipher_delay = mme_dram_model->getAccessLatency(
-        pkt_time, pkt_size, requester, address, access_type, perf);
-
-    /* Access tag */
-    SubsecondTime tag_delay;
-    tag_delay = mme_dram_model->getAccessLatency(pkt_time, pkt_size, requester,
-                                                  address, access_type, perf);
-
-    SubsecondTime total_access_time;
-    switch(access_type) {
-        case DramCntlrInterface::READ:
-        {
-            /* Maxium of (cipher_delay + decrypt), max(cipher_delay, vn_delay) + mac, tag_delay */
+                getvnLatency(pkt_time, requester, address,
+                             vnServerPerfModel::GET_VERSION_NUMBER, perf);
+            cipher_delay = mme_dram_model->getAccessLatency(
+                pkt_time, pkt_size, requester, address, access_type, perf);
+            tag_delay = mme_dram_model->getAccessLatency(
+                pkt_time, pkt_size, requester, address, access_type, perf);
+            /* decrypt cipher text */
             SubsecondTime decryption_time = cipher_delay + mme_aes_delay;
+            /** verify tag
+             * cipher -- mult -- mult -->   --- mult ---> tag
+             * vn -------- aes ----------> |
+            */
+
             SubsecondTime tag_verify_time =
-                (cipher_delay > vn_delay ? cipher_delay : vn_delay) +
-                mme_mult_delay * 3;
+                (cipher_delay + 2 * mme_mult_delay > vn_delay + mme_aes_delay
+                     ? cipher_delay + 2 * mme_mult_delay
+                     : vn_delay + mme_aes_delay) +
+                mme_mult_delay;
             tag_verify_time =
                 tag_verify_time > tag_delay ? tag_verify_time : tag_delay;
-            total_access_time = tag_verify_time > decryption_time ? tag_verify_time : decryption_time;
+            access_time = tag_verify_time > decryption_time ? tag_verify_time
+                                                            : decryption_time;
         } break;
-        case DramCntlrInterface::WRITE:
-        {
-            SubsecondTime max_cal_time = vn_delay > mme_aes_delay ? vn_delay : mme_aes_delay + 3 * mme_mult_delay;
-            total_access_time = max_cal_time + tag_delay > cipher_delay
-                                    ? tag_delay
-                                    : cipher_delay;
+        case DramCntlrInterface::WRITE:{
+            /* Access version number from vn machine and write cipher */
+            vn_delay =
+                getvnLatency(pkt_time, requester, address,
+                             vnServerPerfModel::UPDATE_VERSION_NUMBER, perf);
+            cipher_delay =
+                mme_aes_delay + mme_dram_model->getAccessLatency(
+                                    pkt_time + mme_aes_delay, pkt_size,
+                                    requester, address, access_type, perf);
+            /** calculate tag
+             * cipher -- mult -- mult -->   --- mult ---> tag
+             * vn -------- aes ----------> |
+             */
+            SubsecondTime cal_tag =
+                (mme_mult_delay * 2 > vn_delay + mme_aes_delay
+                     ? mme_mult_delay * 2
+                     : vn_delay + mme_aes_delay) +
+                mme_mult_delay;
+            
+            /* Write tag to dram */
+            SubsecondTime write_tag_delay = mme_dram_model->getAccessLatency(
+                pkt_time + cal_tag, pkt_size, requester, address, access_type,
+                perf);
+            access_time = cipher_delay > write_tag_delay + cal_tag
+                              ? cipher_delay
+                              : write_tag_delay + cal_tag;
         } break;
         default:
             break;
     }
+
+    // Update perf
+    perf->updateTime(pkt_time, ShmemPerf::MME);
+    perf->updateTime(pkt_time + access_time, ShmemPerf::MME_DEVICE);
 
     // Update Memory Counters
     m_num_accesses++;
+    mme_total_vn_delay += vn_delay;
+    mme_total_access_latency += access_time;
 
-    return total_access_time;
+    return access_time;
 }
