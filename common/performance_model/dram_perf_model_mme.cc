@@ -1,15 +1,17 @@
 #include "dram_perf_model_mme.h"
-#include "simulator.h"
 #include "config.h"
 #include "config.hpp"
-#include "subsecond_time.h"
-#include "stats.h"
+#include "dram_perf_model_constant.h"
+#include "dram_perf_model_normal.h"
+#include "dram_perf_model_readwrite.h"
 #include "shmem_perf.h"
+#include "simulator.h"
+#include "stats.h"
+#include "subsecond_time.h"
 
-DramPerfModelMME::DramPerfModelMME(core_id_t core_id, UInt32 cache_block_size,
-                                   DramPerfModel* dram_model)
+DramPerfModelMME::DramPerfModelMME(core_id_t core_id, UInt32 cache_block_size)
     : DramPerfModel(core_id, cache_block_size),
-      mme_dram_model(dram_model),
+      mme_dram_model(NULL),
       mme_queue_model(NULL),
       vn_server(NULL),
       mme_vn_bandwidth(
@@ -28,6 +30,9 @@ DramPerfModelMME::DramPerfModelMME(core_id_t core_id, UInt32 cache_block_size,
       mme_total_access_latency(SubsecondTime::Zero())
 
 {
+    mme_dram_model =
+        DramPerfModel::createDramPerfModel(core_id, cache_block_size, false);
+    mme_dram_model->enable();
     vn_server = new vnServerPerfModel();
     if (Sim()->getCfg()->getBool("perf_model/mme/queue_model/enabled")){
         mme_queue_model = QueueModel::create(
@@ -41,6 +46,8 @@ DramPerfModelMME::DramPerfModelMME(core_id_t core_id, UInt32 cache_block_size,
                         &mme_total_access_latency);
     registerStatsMetric("mme", core_id, "total-vn-delay",
                         &mme_total_vn_delay);
+    registerStatsMetric("dram", core_id, "reads", &mme_dram_reads);
+    registerStatsMetric("dram", core_id, "writes", &mme_dram_writes);
 }
 
 DramPerfModelMME::~DramPerfModelMME(){
@@ -82,7 +89,8 @@ SubsecondTime DramPerfModelMME::getvnLatency(
         perf->updateTime(pkt_time + queue_delay, ShmemPerf::VN_QUEUE);
         perf->updateTime(pkt_time + access_latency, ShmemPerf::VN_DEVICE);
     }
-
+    // fprintf(stderr, "VN latency %d ns, processing_tie %d ns, vn_delay %d ns\n",
+    //         access_latency.getNS(), processing_time.getNS(), vn_delay.getNS());
     return access_latency;
 }
 
@@ -102,6 +110,7 @@ SubsecondTime DramPerfModelMME::getAccessLatency(
                 pkt_time, pkt_size, requester, address, access_type, perf);
             tag_delay = mme_dram_model->getAccessLatency(
                 pkt_time, pkt_size, requester, address, access_type, perf);
+            mme_dram_reads += 2;
             /* decrypt cipher text */
             SubsecondTime decryption_time = cipher_delay + mme_aes_delay;
             /** verify tag
@@ -118,6 +127,12 @@ SubsecondTime DramPerfModelMME::getAccessLatency(
                 tag_verify_time > tag_delay ? tag_verify_time : tag_delay;
             access_time = tag_verify_time > decryption_time ? tag_verify_time
                                                             : decryption_time;
+
+            // fprintf(stderr,
+            //         "MME read time %lu ns, tag_delay %lu ns, cipher_delay %lu "
+            //         "ns, vn_delay %lu ns\n",
+            //         access_time.getNS(), tag_delay.getNS(),
+            //         cipher_delay.getNS(), vn_delay.getNS());
         } break;
         case DramCntlrInterface::WRITE:{
             /* Access version number from vn machine and write cipher */
@@ -145,6 +160,7 @@ SubsecondTime DramPerfModelMME::getAccessLatency(
             access_time = cipher_delay > write_tag_delay + cal_tag
                               ? cipher_delay
                               : write_tag_delay + cal_tag;
+            mme_dram_writes += 2;
         } break;
         default:
             break;

@@ -6,12 +6,19 @@
 #include "dram_perf_model_mme.h"
 #include "config.hpp"
 
-DramPerfModel* DramPerfModel::createDramPerfModel(core_id_t core_id, UInt32 cache_block_size)
-{
-   String type = Sim()->getCfg()->getString("perf_model/dram/type");
-   bool mme_enable = Sim()->getCfg()->getBool("perf_model/dram/mme_enable");
+DramPerfModel* DramPerfModel::createDramPerfModel(core_id_t core_id,
+                                                  UInt32 cache_block_size,
+                                                  bool mme_enable) {
+    String type = Sim()->getCfg()->getString("perf_model/dram/type");
+    if(mme_enable) mme_enable = Sim()->getCfg()->getBool("perf_model/dram/mme_enable");
+
+    if (!mme_enable) std::cerr << "This is MME dram " << type << std::endl;
+
+    if (mme_enable)
+       return new DramPerfModelMME(core_id, cache_block_size);
 
    DramPerfModel* dram_model = NULL;
+
    if (type == "constant") {
        dram_model =  new DramPerfModelConstant(core_id, cache_block_size);
    } else if (type == "readwrite") {
@@ -22,9 +29,7 @@ DramPerfModel* DramPerfModel::createDramPerfModel(core_id_t core_id, UInt32 cach
        LOG_PRINT_ERROR("Invalid DRAM model type %s", type.c_str());
    }
 
-   if (mme_enable){
-       return new DramPerfModelMME(core_id, cache_block_size, dram_model);
-   } else {
-       return dram_model;
-   }
+   
+
+   return dram_model;
 }

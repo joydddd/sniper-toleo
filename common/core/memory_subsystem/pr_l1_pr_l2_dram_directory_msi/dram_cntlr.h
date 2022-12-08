@@ -27,6 +27,7 @@ namespace PrL1PrL2DramDirectoryMSI
          typedef std::unordered_map<IntPtr,UInt64> AccessCountMap;
          AccessCountMap* m_dram_access_count;
          UInt64 m_reads, m_writes;
+         bool m_mme_enable; 
 
          ShmemPerf m_dummy_shmem_perf;
 

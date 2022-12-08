@@ -22,9 +22,9 @@ SubsecondTime vnServerPerfModel::getLatency(vnActions_t action) {
     switch (action)
     {
     case GET_VERSION_NUMBER:
-        return vn_mult_delay * 3;
+        return vn_mult_delay * 2 + vn_access_cost;
     case UPDATE_VERSION_NUMBER:
-        return vn_mult_delay * 3;
+        return vn_mult_delay * 2 + vn_access_cost;
     default:
         break;
     }

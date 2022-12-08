@@ -6,6 +6,8 @@
 #include "stats.h"
 #include "fault_injection.h"
 #include "shmem_perf.h"
+#include "config.h"
+#include "config.hpp"
 
 #if 0
    extern Lock iolock;
@@ -37,8 +39,18 @@ DramCntlr::DramCntlr(MemoryManagerBase* memory_manager,
       : NULL;
 
    m_dram_access_count = new AccessCountMap[DramCntlrInterface::NUM_ACCESS_TYPES];
-   registerStatsMetric("dram", memory_manager->getCore()->getId(), "reads", &m_reads);
-   registerStatsMetric("dram", memory_manager->getCore()->getId(), "writes", &m_writes);
+   m_mme_enable = Sim()->getCfg()->getBool("perf_model/dram/mme_enable");
+   if (m_mme_enable){
+       registerStatsMetric("mme", memory_manager->getCore()->getId(), "reads",
+                           &m_reads);
+       registerStatsMetric("mme", memory_manager->getCore()->getId(), "writes",
+                           &m_writes);
+   } else {
+       registerStatsMetric("dram", memory_manager->getCore()->getId(), "reads",
+                           &m_reads);
+       registerStatsMetric("dram", memory_manager->getCore()->getId(), "writes",
+                           &m_writes);
+   }
 }
 
 DramCntlr::~DramCntlr()
