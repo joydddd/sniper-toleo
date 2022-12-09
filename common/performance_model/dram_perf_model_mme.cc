@@ -27,7 +27,8 @@ DramPerfModelMME::DramPerfModelMME(core_id_t core_id, UInt32 cache_block_size)
           static_cast<uint64_t>(TimeConverter<float>::NStoFS(
               Sim()->getCfg()->getFloat("perf_model/mme/aes_latency")))),
       mme_total_vn_delay(SubsecondTime::Zero()),
-      mme_total_access_latency(SubsecondTime::Zero())
+      mme_total_read_latency(SubsecondTime::Zero()),
+      mme_total_write_latency(SubsecondTime::Zero())
 
 {
     mme_dram_model =
@@ -42,8 +43,10 @@ DramPerfModelMME::DramPerfModelMME(core_id_t core_id, UInt32 cache_block_size)
                 vnServerPerfModel::vn_request_width));
     }
 
-    registerStatsMetric("mme", core_id, "total-access-latency",
-                        &mme_total_access_latency);
+    registerStatsMetric("mme", core_id, "total-read-latency",
+                        &mme_total_read_latency);
+    registerStatsMetric("mme", core_id, "total-write-latency",
+                        &mme_total_write_latency);
     registerStatsMetric("mme", core_id, "total-vn-delay",
                         &mme_total_vn_delay);
     registerStatsMetric("dram", core_id, "reads", &mme_dram_reads);
@@ -133,6 +136,7 @@ SubsecondTime DramPerfModelMME::getAccessLatency(
             //         "ns, vn_delay %lu ns\n",
             //         access_time.getNS(), tag_delay.getNS(),
             //         cipher_delay.getNS(), vn_delay.getNS());
+            mme_total_read_latency += access_time;
         } break;
         case DramCntlrInterface::WRITE:{
             /* Access version number from vn machine and write cipher */
@@ -161,6 +165,7 @@ SubsecondTime DramPerfModelMME::getAccessLatency(
                               ? cipher_delay
                               : write_tag_delay + cal_tag;
             mme_dram_writes += 2;
+            mme_total_write_latency += access_time;
         } break;
         default:
             break;
@@ -173,7 +178,6 @@ SubsecondTime DramPerfModelMME::getAccessLatency(
     // Update Memory Counters
     m_num_accesses++;
     mme_total_vn_delay += vn_delay;
-    mme_total_access_latency += access_time;
 
     return access_time;
 }

@@ -152,7 +152,20 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
   if 'dram-queue.total-time-used' in results:
     results['dram.bandwidth'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['dram-queue.total-time-used'])
     template.append(('  average dram bandwidth utilization', 'dram.bandwidth', lambda v: '%.2f%%' % v))
-
+  
+  # Output mme access stats. 
+  results['mme.accesses'] = map(sum, zip(results['mme.reads'], results['mme.writes']))
+  results['mme.avgreadlatency'] = map(lambda (a,b): a/(b or 1), zip(results['mme.total-read-latency'], results['mme.reads']))
+  results['mme.avgwritelatency'] = map(lambda (a,b): a/(b or 1), zip(results['mme.total-write-latency'], results['mme.writes']))
+  results['mme.avgvnlatency'] = map(lambda (a,b): a/(b or 1), zip(results['mme.total-vn-delay'], results['mme.accesses']))
+  template += [
+    ('MME summary', '', ''),
+    ('  num mme accesses', 'mme.accesses', str),
+    ('  average dram read latency (ns)', 'mme.avgreadlatency', format_ns(2)),
+    ('  average dram write latency (ns)', 'mme.avgwritelatency', format_ns(2)),
+    ('  average vn server latency (ns)', 'mme.avgvnlatency', format_ns(2)),
+  ]
+  
   if 'L1-D.loads-where-dram-local' in results:
     results['L1-D.loads-where-dram'] = map(sum, zip(results['L1-D.loads-where-dram-local'], results['L1-D.loads-where-dram-remote']))
     results['L1-D.stores-where-dram'] = map(sum, zip(results['L1-D.stores-where-dram-local'], results['L1-D.stores-where-dram-remote']))

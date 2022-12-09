@@ -19,7 +19,8 @@ class DramPerfModelMME : public DramPerfModel {
     SubsecondTime mme_aes_delay;
 
     SubsecondTime mme_total_vn_delay;
-    SubsecondTime mme_total_access_latency;
+    SubsecondTime mme_total_read_latency;
+    SubsecondTime mme_total_write_latency;
 
     UInt64 mme_dram_reads, mme_dram_writes; 
 
