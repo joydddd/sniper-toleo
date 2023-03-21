@@ -154,6 +154,9 @@ CacheCntlr::CacheCntlr(MemComponent::component_t mem_component,
    m_shmem_perf_global(NULL),
    m_shmem_perf_model(shmem_perf_model)
 {
+   std::cerr << "Create CacheCntlr " << cache_params.configName << "core_id "
+             << m_core_id << " m_core_id_master " << m_core_id_master << " shared_cores " << m_shared_cores
+             << std::endl;
    m_core_id_master = m_core_id - m_core_id % m_shared_cores;
    Sim()->getStatsManager()->logTopology(name, core_id, m_core_id_master);
 
