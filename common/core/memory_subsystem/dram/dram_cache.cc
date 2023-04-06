@@ -191,10 +191,12 @@ DramCache::accessDataArray(Cache::access_t access, core_id_t requester, Subsecon
       queue_delay = SubsecondTime::Zero();
    }
 
-   perf->updateTime(t_start);
-   perf->updateTime(t_start + queue_delay, ShmemPerf::DRAM_CACHE_QUEUE);
-   perf->updateTime(t_start + queue_delay + processing_time, ShmemPerf::DRAM_CACHE_BUS);
-   perf->updateTime(t_start + queue_delay + processing_time + m_data_access_time, ShmemPerf::DRAM_CACHE_DATA);
+   if (perf){
+      perf->updateTime(t_start);
+      perf->updateTime(t_start + queue_delay, ShmemPerf::DRAM_CACHE_QUEUE);
+      perf->updateTime(t_start + queue_delay + processing_time, ShmemPerf::DRAM_CACHE_BUS);
+      perf->updateTime(t_start + queue_delay + processing_time + m_data_access_time, ShmemPerf::DRAM_CACHE_DATA);
+   }
 
    return queue_delay + processing_time + m_data_access_time;
 }
