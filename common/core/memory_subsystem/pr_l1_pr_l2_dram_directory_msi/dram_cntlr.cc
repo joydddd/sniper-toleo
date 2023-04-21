@@ -9,14 +9,21 @@
 #include "config.h"
 #include "config.hpp"
 
-#if 0
+// #if 0
    extern Lock iolock;
 #  include "core_manager.h"
 #  include "simulator.h"
-#  define MYLOG(...) { ScopedLock l(iolock); fflush(stdout); printf("[%s] %d%cdr %-25s@%3u: ", itostr(getShmemPerfModel()->getElapsedTime()).c_str(), getMemoryManager()->getCore()->getId(), Sim()->getCoreManager()->amiUserThread() ? '^' : '_', __FUNCTION__, __LINE__); printf(__VA_ARGS__); printf("\n"); fflush(stdout); }
-#else
-#  define MYLOG(...) {}
-#endif
+#  define MYLOG(...) {                                                                    \
+   ScopedLock l(iolock);                                                                  \
+   fflush(f_trace);                                                                        \
+   fprintf(f_trace, "[%s] %d%cdr %-25s@%3u: ",                                                      \
+   itostr(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD)).c_str(),      \
+         getMemoryManager()->getCore()->getId(),                                          \
+         Sim()->getCoreManager()->amiUserThread() ? '^' : '_', __FUNCTION__, __LINE__);   \
+   fprintf(f_trace, __VA_ARGS__); fprintf(f_trace, "\n"); fflush(f_trace); }
+// #else
+// #  define MYLOG(...) {}
+// #endif
 
 class TimeDistribution;
 
@@ -51,6 +58,12 @@ DramCntlr::DramCntlr(MemoryManagerBase* memory_manager,
        registerStatsMetric("dram", memory_manager->getCore()->getId(), "writes",
                            &m_writes);
    }
+
+   std::ostringstream trace_filename;
+   trace_filename << "dram_cntlr_" << memory_manager->getCore()->getId()
+                  << ".trace";
+   f_trace = fopen(trace_filename.str().c_str(), "w+");
+   std::cerr << "Create Dram cntlr trace " << trace_filename.str().c_str() << std::endl;
 }
 
 DramCntlr::~DramCntlr()
@@ -85,7 +98,7 @@ DramCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, 
    #ifdef ENABLE_DRAM_ACCESS_COUNT
    addToDramAccessCount(address, READ);
    #endif
-   MYLOG("R @ %08lx latency %s", address, itostr(dram_access_latency).c_str());
+   // MYLOG("[%d]R @ %08lx latency %s", requester, address, itostr(dram_access_latency.getNS()).c_str());
 
    return boost::tuple<SubsecondTime, HitWhere::where_t>(dram_access_latency, HitWhere::DRAM);
 }
@@ -93,6 +106,7 @@ DramCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, 
 boost::tuple<SubsecondTime, HitWhere::where_t>
 DramCntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now)
 {
+   std::cerr << "WRITE! " << std::endl;
    if (Sim()->getFaultinjectionManager())
    {
       if (m_data_map[address] == NULL)
@@ -112,7 +126,7 @@ DramCntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, Su
    #ifdef ENABLE_DRAM_ACCESS_COUNT
    addToDramAccessCount(address, WRITE);
    #endif
-   MYLOG("W @ %08lx", address);
+   MYLOG("[%d]W @ %08lx", requester, address);
 
    return boost::tuple<SubsecondTime, HitWhere::where_t>(dram_access_latency, HitWhere::DRAM);
 }

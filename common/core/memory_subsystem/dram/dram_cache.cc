@@ -99,10 +99,13 @@ DramCache::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, Su
 std::pair<bool, SubsecondTime>
 DramCache::doAccess(Cache::access_t access, IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf)
 {
+   //DEBUG: perf == NULL when doAccess is called from putDataToDram
    PrL1CacheBlockInfo* block_info = (PrL1CacheBlockInfo*)m_cache->peekSingleLine(address);
    SubsecondTime latency = m_tags_access_time;
+   if (perf){
    perf->updateTime(now);
    perf->updateTime(now + latency, ShmemPerf::DRAM_CACHE_TAGS);
+   }
    bool cache_hit = false, prefetch_hit = false;
 
    if (block_info)
@@ -171,6 +174,7 @@ DramCache::insertLine(Cache::access_t access, IntPtr address, core_id_t requeste
    // Writeback to DRAM done off-line, so don't affect return latency
    if (eviction && evict_block_info.getCState() == CacheState::MODIFIED)
    {
+      std::cerr << "evict line" << std::endl;
       m_dram_cntlr->putDataToDram(evict_address, requester, data_buf, now);
    }
 }

@@ -29,6 +29,8 @@ namespace PrL1PrL2DramDirectoryMSI
          UInt64 m_reads, m_writes;
          bool m_mme_enable; 
 
+         FILE* f_trace; 
+
          ShmemPerf m_dummy_shmem_perf;
 
          SubsecondTime runDramPerfModel(core_id_t requester, SubsecondTime time, IntPtr address, DramCntlrInterface::access_t access_type, ShmemPerf *perf);

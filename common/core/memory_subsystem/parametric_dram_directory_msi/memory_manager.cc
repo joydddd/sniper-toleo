@@ -316,7 +316,6 @@ MemoryManager::MemoryManager(Core* core,
        cache_parameters[(MemComponent::component_t)i].tags_access_time
       );
 
-   fprintf(stderr, "m_last_level_cache %d\n", m_last_level_cache);
 
    if (m_dram_cntlr_present)
       LOG_ASSERT_ERROR(m_cache_cntlrs[m_last_level_cache]->isMasterCache() == true,
