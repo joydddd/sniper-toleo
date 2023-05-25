@@ -46,11 +46,14 @@ typedef SInt32 thread_id_t;
 typedef SInt32 app_id_t;
 typedef SInt32 core_id_t;
 typedef SInt32 carbon_thread_t;
+typedef uint8_t cxl_id_t;
 
 #define INVALID_THREAD_ID ((thread_id_t) -1)
 #define INVALID_APP_ID ((app_id_t) -1)
 #define INVALID_CORE_ID ((core_id_t) -1)
 #define INVALID_ADDRESS  ((IntPtr) -1)
+#define INVALID_CXL_ID ((cxl_id_t) -1)
+#define HOST_CXL_ID ((cxl_id_t) -2)
 
 #if defined(__cplusplus)
 # if !defined(PIN_CRT)

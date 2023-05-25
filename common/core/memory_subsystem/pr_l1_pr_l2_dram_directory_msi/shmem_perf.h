@@ -32,10 +32,10 @@ class ShmemPerf
          DRAM_QUEUE,
          DRAM_BUS,
          DRAM_DEVICE,
-         MME,
-         VN_QUEUE,
-         VN_DEVICE,
-         MME_DEVICE,
+         CXL,
+         CXL_QUEUE,
+         CXL_BUS,
+         CXL_DEVICE,
          UNKNOWN,
          NUM_SHMEM_TIMES
       } shmem_times_type_t;

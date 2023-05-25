@@ -3,6 +3,7 @@
 #include "memory_manager_base.h"
 #include "cache_base.h"
 #include "cache_cntlr.h"
+#include "cxl_cntlr.h"
 #include "../pr_l1_pr_l2_dram_directory_msi/dram_directory_cntlr.h"
 #include "../pr_l1_pr_l2_dram_directory_msi/dram_cntlr.h"
 #include "address_home_lookup.h"
@@ -34,6 +35,8 @@ namespace ParametricDramDirectoryMSI
          DramCache* m_dram_cache;
          PrL1PrL2DramDirectoryMSI::DramDirectoryCntlr* m_dram_directory_cntlr;
          PrL1PrL2DramDirectoryMSI::DramCntlr* m_dram_cntlr;
+         CXLCntlr* m_cxl_cntlr;
+         static CXLAddressTranslator* m_address_translator; // Global Address Translator
          AddressHomeLookup* m_tag_directory_home_lookup;
          AddressHomeLookup* m_dram_controller_home_lookup;
          TLB *m_itlb, *m_dtlb, *m_stlb;
@@ -44,6 +47,7 @@ namespace ParametricDramDirectoryMSI
 
          bool m_tag_directory_present;
          bool m_dram_cntlr_present;
+         bool m_cxl_cntlr_present;
 
          Semaphore* m_user_thread_sem;
          Semaphore* m_network_thread_sem;

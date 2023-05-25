@@ -12,12 +12,12 @@ class Prefetcher;
 class DramCache : public DramCntlrInterface
 {
    public:
-      DramCache(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, AddressHomeLookup* home_lookup, UInt32 cache_block_size, DramCntlrInterface *dram_cntlr);
+      DramCache(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, AddressHomeLookup* home_lookup, UInt32 cache_block_size, DramCntlrInterface *dram_cntlr, CXLAddressTranslator* cxl_address_translator);
       ~DramCache();
 
       virtual boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
       virtual boost::tuple<SubsecondTime, HitWhere::where_t> putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
-
+      void handleMsgFromCXL(core_id_t sender, PrL1PrL2DramDirectoryMSI::ShmemMsg* shmem_msg);
    private:
       core_id_t m_core_id;
       UInt32 m_cache_block_size;
@@ -38,7 +38,7 @@ class DramCache : public DramCntlrInterface
       UInt64 m_hits_prefetch, m_prefetches;
       SubsecondTime m_prefetch_mshr_delay;
 
-      std::pair<bool, SubsecondTime> doAccess(Cache::access_t access, IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
+      boost::tuple<SubsecondTime, HitWhere::where_t> doAccess(Cache::access_t access, IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
       void insertLine(Cache::access_t access, IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
       SubsecondTime accessDataArray(Cache::access_t access, core_id_t requester, SubsecondTime t_start, ShmemPerf *perf);
       void callPrefetcher(IntPtr address, bool cache_hit, bool prefetch_hit, SubsecondTime t_issue);

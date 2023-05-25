@@ -23,7 +23,8 @@ class MemComponent
          NUCA_CACHE,
          DRAM_CACHE,
          DRAM,
-         MAX_MEM_COMPONENT = DRAM,
+         CXL, 
+         MAX_MEM_COMPONENT = CXL,
          NUM_MEM_COMPONENTS = MAX_MEM_COMPONENT - MIN_MEM_COMPONENT + 1
       };
 };

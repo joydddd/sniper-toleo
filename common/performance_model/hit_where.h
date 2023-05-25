@@ -21,6 +21,7 @@ class HitWhere
          NUCA_CACHE,
          DRAM_CACHE,
          DRAM,
+         CXL,
          DRAM_LOCAL,
          DRAM_REMOTE,
          CACHE_REMOTE,

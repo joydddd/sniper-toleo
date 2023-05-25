@@ -3,6 +3,7 @@
 #include "cache_base.h"
 #include "nuca_cache.h"
 #include "dram_cache.h"
+#include "cxl_cntlr.h"
 #include "tlb.h"
 #include "simulator.h"
 #include "log.h"
@@ -28,6 +29,8 @@
 namespace ParametricDramDirectoryMSI
 {
 
+CXLAddressTranslator* MemoryManager::m_address_translator = NULL;
+
 std::map<CoreComponentType, CacheCntlr*> MemoryManager::m_all_cache_cntlrs;
 
 MemoryManager::MemoryManager(Core* core,
@@ -37,11 +40,13 @@ MemoryManager::MemoryManager(Core* core,
    m_dram_cache(NULL),
    m_dram_directory_cntlr(NULL),
    m_dram_cntlr(NULL),
+   m_cxl_cntlr(NULL),
    m_itlb(NULL), m_dtlb(NULL), m_stlb(NULL),
    m_tlb_miss_penalty(NULL,0),
    m_tlb_miss_parallel(false),
    m_tag_directory_present(false),
    m_dram_cntlr_present(false),
+   m_cxl_cntlr_present(false),
    m_enabled(false)
 {
    // Read Parameters from the Config file
@@ -62,6 +67,14 @@ MemoryManager::MemoryManager(Core* core,
    String dram_directory_type_str;
    UInt32 dram_directory_home_lookup_param = 0;
    ComponentLatency dram_directory_cache_access_time(global_domain, 0);
+
+   // Page Translation
+   bool system_page_translation_enable = false;
+   UInt32 system_page_size = 0;
+
+   // CXL
+   bool cxl_enable = false;
+   
 
    try
    {
@@ -177,6 +190,16 @@ MemoryManager::MemoryManager(Core* core,
 
       // Dram Cntlr
       dram_direct_access = Sim()->getCfg()->getBool("perf_model/dram/direct_access");
+
+      // Page Translation
+      system_page_translation_enable = Sim()->getCfg()->getBool("system/addr_trans/enable");
+      if (system_page_translation_enable){
+         system_page_size = Sim()->getCfg()->getInt("system/addr_trans/page_size") * 1024;
+      }
+
+      // CXL
+      cxl_enable = Sim()->getCfg()->getBool("cxl/enable");
+
    }
    catch(...)
    {
@@ -186,9 +209,49 @@ MemoryManager::MemoryManager(Core* core,
    m_user_thread_sem = new Semaphore(0);
    m_network_thread_sem = new Semaphore(0);
 
+   SInt32 num_cxl_cntlr = 0;
+   std::vector<core_id_t> cxl_dev_cntlr_id_mapping; // cxl id to core id with cxl cntlr mapping
+   std::vector<UInt64> cxl_memory_expander_size_list; // memory expander size, in Bytes
+   if (cxl_enable) {
+      num_cxl_cntlr = Sim()->getCfg()->getInt("perf_model/cxl/num_cxl_cntlr");
+      for (int i = 0; i < num_cxl_cntlr; i++) {
+         String memory_expander_name = itostr(i);
+         cxl_dev_cntlr_id_mapping.push_back(Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_"+ memory_expander_name + "/cxl_cntlr_node"));
+         cxl_memory_expander_size_list.push_back(Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_"+ memory_expander_name + "/size"));
+      }
+   }
+
    std::vector<core_id_t> core_list_with_dram_controllers = getCoreListWithMemoryControllers();
    std::vector<core_id_t> core_list_with_tag_directories;
    String tag_directory_locations = Sim()->getCfg()->getString("perf_model/dram_directory/locations");
+
+   /* Address Translator */
+   if (!m_address_translator && system_page_translation_enable){
+      UInt64 dram_total_size = 0;
+      for (auto it = core_list_with_dram_controllers.begin(); it != core_list_with_dram_controllers.end(); it++){
+         dram_total_size += Sim()->getCfg()->getIntArray("perf_model/dram/size_perf_dram_cntlr", *it);
+      }
+
+      m_address_translator = new CXLAddressTranslator(cxl_memory_expander_size_list, cxl_dev_cntlr_id_mapping, system_page_size, dram_total_size);
+   }
+
+   if (find(cxl_dev_cntlr_id_mapping.begin(), cxl_dev_cntlr_id_mapping.end(), getCore()->getId()) != cxl_dev_cntlr_id_mapping.end())
+   {
+      LOG_ASSERT_ERROR(m_address_translator, "CXL address translator not initialized!");
+      m_cxl_cntlr_present = true;
+      int n_cxl_dev = 0;
+      std::vector<bool> cxl_dev_connected(cxl_dev_cntlr_id_mapping.size(), false);
+      for (cxl_id_t cxl_id = 0; cxl_id < cxl_dev_cntlr_id_mapping.size(); cxl_id++) {
+         if (cxl_dev_cntlr_id_mapping[cxl_id] == core->getId()) {
+            n_cxl_dev++;
+            cxl_dev_connected[cxl_id] = true;
+         }
+      }
+      Sim()->getStatsManager()->logTopology("cxl-cntlr", core->getId(), core->getId());
+      /* TODO: Initialize CXL devices */
+      m_cxl_cntlr = new CXLCntlr(this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator, cxl_dev_connected);
+   }
+
 
    if (tag_directory_locations == "dram")
    {
@@ -231,12 +294,12 @@ MemoryManager::MemoryManager(Core* core,
 
       m_dram_cntlr = new PrL1PrL2DramDirectoryMSI::DramCntlr(this,
             getShmemPerfModel(),
-            getCacheBlockSize());
+            getCacheBlockSize(), m_address_translator);
       Sim()->getStatsManager()->logTopology("dram-cntlr", core->getId(), core->getId());
 
       if (Sim()->getCfg()->getBoolArray("perf_model/dram/cache/enabled", core->getId()))
       {
-         m_dram_cache = new DramCache(this, getShmemPerfModel(), m_dram_controller_home_lookup, getCacheBlockSize(), m_dram_cntlr);
+         m_dram_cache = new DramCache(this, getShmemPerfModel(), m_dram_controller_home_lookup, getCacheBlockSize(), m_dram_cntlr, m_address_translator);
          Sim()->getStatsManager()->logTopology("dram-cache", core->getId(), core->getId());
       }
    }
@@ -398,6 +461,8 @@ MemoryManager::~MemoryManager()
    delete m_tag_directory_home_lookup;
    delete m_dram_controller_home_lookup;
 
+   if (m_address_translator) delete m_address_translator;
+
    for(i = MemComponent::FIRST_LEVEL_CACHE; i <= (UInt32)m_last_level_cache; ++i)
    {
       delete m_cache_cntlrs[(MemComponent::component_t)i];
@@ -410,6 +475,8 @@ MemoryManager::~MemoryManager()
       delete m_dram_cache;
    if (m_dram_cntlr)
       delete m_dram_cntlr;
+   if (m_cxl_cntlr)
+      delete m_cxl_cntlr;
    if (m_dram_directory_cntlr)
       delete m_dram_directory_cntlr;
 }
@@ -509,11 +576,35 @@ MYLOG("begin");
                break;
             }
 
+            case MemComponent::CXL:
+            {
+               if (m_dram_cache){
+                   m_dram_cache->handleMsgFromCXL(sender, shmem_msg);
+               }
+               shmem_msg->getPerf()->updateTime(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD));
+               core_id_t tag_dir_core_id = m_tag_directory_home_lookup->getHome(shmem_msg->getAddress());
+               // forward message to TAG_DIR
+               sendMsg(PrL1PrL2DramDirectoryMSI::ShmemMsg::DRAM_READ_REP,
+                       MemComponent::DRAM, MemComponent::TAG_DIR,
+                       shmem_msg->getRequester(), /* requester */
+                       tag_dir_core_id,           /* receiver */
+                       shmem_msg->getAddress(), shmem_msg->getDataBuf(),
+                       getCacheBlockSize(), 
+                       shmem_msg->getWhere(),
+                       shmem_msg->getPerf(), ShmemPerfModel::_SIM_THREAD);
+               break;
+            }
+
             default:
                LOG_PRINT_ERROR("Unrecognized sender component(%u)",
                      sender_mem_component);
                break;
          }
+         break;
+      
+      case MemComponent::CXL:
+         LOG_ASSERT_ERROR(m_cxl_cntlr_present, "CXL Cntlr NOT present");
+         m_cxl_cntlr->handleMsgFromDram(sender, shmem_msg);
          break;
 
       default:
@@ -642,6 +733,9 @@ MemoryManager::enableModels()
 
    if (m_dram_cntlr_present)
       m_dram_cntlr->getDramPerfModel()->enable();
+   
+   if (m_cxl_cntlr_present)
+      m_cxl_cntlr->enablePerfModel();
 }
 
 void
@@ -657,6 +751,9 @@ MemoryManager::disableModels()
 
    if (m_dram_cntlr_present)
       m_dram_cntlr->getDramPerfModel()->disable();
+
+   if (m_cxl_cntlr_present)
+      m_cxl_cntlr->disablePerfModel();
 }
 
 }

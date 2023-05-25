@@ -36,6 +36,12 @@ namespace PrL1PrL2DramDirectoryMSI
             // DRAM > tag directory
             DRAM_READ_REP,
 
+            // DRAM > CXL
+            CXL_READ_REQ,
+            CXL_WRITE_REQ,
+            // CXL > DRAM
+            CXL_READ_REP,
+
             MAX_MSG_TYPE = NULLIFY_REQ,
             NUM_MSG_TYPES = MAX_MSG_TYPE - MIN_MSG_TYPE + 1
          };

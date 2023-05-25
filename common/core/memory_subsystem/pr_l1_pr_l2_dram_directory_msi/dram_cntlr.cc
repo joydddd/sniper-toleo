@@ -9,7 +9,8 @@
 #include "config.h"
 #include "config.hpp"
 
-// #if 0
+#if 1
+#  define MYLOG_ENABLED
    extern Lock iolock;
 #  include "core_manager.h"
 #  include "simulator.h"
@@ -21,9 +22,9 @@
          getMemoryManager()->getCore()->getId(),                                          \
          Sim()->getCoreManager()->amiUserThread() ? '^' : '_', __FUNCTION__, __LINE__);   \
    fprintf(f_trace, __VA_ARGS__); fprintf(f_trace, "\n"); fflush(f_trace); }
-// #else
-// #  define MYLOG(...) {}
-// #endif
+#else
+#  define MYLOG(...) {}
+#endif
 
 class TimeDistribution;
 
@@ -32,8 +33,9 @@ namespace PrL1PrL2DramDirectoryMSI
 
 DramCntlr::DramCntlr(MemoryManagerBase* memory_manager,
       ShmemPerfModel* shmem_perf_model,
-      UInt32 cache_block_size)
-   : DramCntlrInterface(memory_manager, shmem_perf_model, cache_block_size)
+      UInt32 cache_block_size,
+      CXLAddressTranslator* cxl_address_translator)
+   : DramCntlrInterface(memory_manager, shmem_perf_model, cache_block_size, cxl_address_translator)
    , m_reads(0)
    , m_writes(0)
 {
@@ -46,24 +48,18 @@ DramCntlr::DramCntlr(MemoryManagerBase* memory_manager,
       : NULL;
 
    m_dram_access_count = new AccessCountMap[DramCntlrInterface::NUM_ACCESS_TYPES];
-   m_mme_enable = Sim()->getCfg()->getBool("perf_model/dram/mme_enable");
-   if (m_mme_enable){
-       registerStatsMetric("mme", memory_manager->getCore()->getId(), "reads",
-                           &m_reads);
-       registerStatsMetric("mme", memory_manager->getCore()->getId(), "writes",
-                           &m_writes);
-   } else {
-       registerStatsMetric("dram", memory_manager->getCore()->getId(), "reads",
-                           &m_reads);
-       registerStatsMetric("dram", memory_manager->getCore()->getId(), "writes",
-                           &m_writes);
-   }
+   registerStatsMetric("dram", memory_manager->getCore()->getId(), "reads",
+                     &m_reads);
+   registerStatsMetric("dram", memory_manager->getCore()->getId(), "writes",
+                     &m_writes);
 
+#ifdef MYLOG_ENABLED
    std::ostringstream trace_filename;
    trace_filename << "dram_cntlr_" << memory_manager->getCore()->getId()
                   << ".trace";
    f_trace = fopen(trace_filename.str().c_str(), "w+");
    std::cerr << "Create Dram cntlr trace " << trace_filename.str().c_str() << std::endl;
+#endif // MYLOG_ENABLED
 }
 
 DramCntlr::~DramCntlr()
@@ -72,11 +68,35 @@ DramCntlr::~DramCntlr()
    delete [] m_dram_access_count;
 
    delete m_dram_perf_model;
+#ifdef MYLOG_ENABLED
+   fclose(f_trace);
+#endif // MYLOG_ENABLED
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
 DramCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf)
 {
+   /* check if data locate in this dram */
+   if (m_address_translator){
+       cxl_req_t cxl_req;
+       cxl_req.cxl_id = m_address_translator->getHome(address);
+       cxl_req.phy_address = m_address_translator->getLinearAddress(address);
+       if (cxl_req.cxl_id != HOST_CXL_ID) {
+           cxl_req.core_id = m_address_translator->getCntlrHome(cxl_req.cxl_id);
+           // send a msg to request data from CXL
+           getMemoryManager()->sendMsg(
+               PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_READ_REQ,
+               MemComponent::DRAM, MemComponent::CXL, requester, /* requester */
+               cxl_req.core_id,                                  /* receiver */
+               address, NULL, getCacheBlockSize(), HitWhere::UNKNOWN, perf,
+               ShmemPerfModel::_SIM_THREAD);
+           MYLOG("[%d]CXL:R @ %08lx -> %08lx", requester, address,
+                 cxl_req.phy_address);
+           return boost::tuple<SubsecondTime, HitWhere::where_t>(
+               SubsecondTime::Zero(), HitWhere::CXL);
+      }
+      LOG_ASSERT_ERROR(cxl_req.cxl_id == HOST_CXL_ID, "Home for address %p is unrecognized: addr_home %d", address, cxl_req.cxl_id);
+   }
    if (Sim()->getFaultinjectionManager())
    {
       if (m_data_map.count(address) == 0)
@@ -98,7 +118,7 @@ DramCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, 
    #ifdef ENABLE_DRAM_ACCESS_COUNT
    addToDramAccessCount(address, READ);
    #endif
-   // MYLOG("[%d]R @ %08lx latency %s", requester, address, itostr(dram_access_latency.getNS()).c_str());
+   MYLOG("[%d]R @ %08lx latency %s", requester, address, itostr(dram_access_latency.getNS()).c_str());
 
    return boost::tuple<SubsecondTime, HitWhere::where_t>(dram_access_latency, HitWhere::DRAM);
 }
@@ -106,7 +126,28 @@ DramCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, 
 boost::tuple<SubsecondTime, HitWhere::where_t>
 DramCntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now)
 {
-   std::cerr << "WRITE! " << std::endl;
+   /* check if data locate in this dram */
+   if (m_address_translator){
+      cxl_req_t cxl_req;
+      cxl_req.cxl_id = m_address_translator->getHome(address);
+      cxl_req.phy_address = m_address_translator->getLinearAddress(address);
+      if (cxl_req.cxl_id != HOST_CXL_ID){
+         cxl_req.core_id = m_address_translator->getCntlrHome(cxl_req.cxl_id);
+         getMemoryManager()->sendMsg(
+             PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_WRITE_REQ,
+             MemComponent::DRAM, MemComponent::CXL, 
+             requester, /* requester */
+             cxl_req.core_id, /* receiver */
+             address, 
+             data_buf, getCacheBlockSize(),
+             HitWhere::CXL, &m_dummy_shmem_perf, ShmemPerfModel::_SIM_THREAD);
+         MYLOG("[%d]CXL:W @ %08lx -> %08lx", requester, address,
+               cxl_req.phy_address);
+         return boost::tuple<SubsecondTime, HitWhere::where_t>(SubsecondTime::Zero(), HitWhere::CXL);
+      }
+      LOG_ASSERT_ERROR(cxl_req.cxl_id == HOST_CXL_ID, "Home for address %p is unrecognized: cxl_id %d", address, cxl_req.cxl_id);
+   }
+
    if (Sim()->getFaultinjectionManager())
    {
       if (m_data_map[address] == NULL)
