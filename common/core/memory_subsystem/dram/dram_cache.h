@@ -17,7 +17,7 @@ class DramCache : public DramCntlrInterface
 
       virtual boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
       virtual boost::tuple<SubsecondTime, HitWhere::where_t> putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
-      void handleMsgFromCXL(core_id_t sender, PrL1PrL2DramDirectoryMSI::ShmemMsg* shmem_msg);
+      void handleDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
    private:
       core_id_t m_core_id;
       UInt32 m_cache_block_size;

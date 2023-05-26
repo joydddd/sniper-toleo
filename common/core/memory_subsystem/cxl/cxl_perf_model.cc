@@ -8,22 +8,21 @@
 CXLPerfModel::CXLPerfModel(cxl_id_t cxl_id, UInt64 cache_block_size):
     m_enabled(false),
     m_num_accesses(0),
-    m_cxl_id_str(itostr(cxl_id)),
+    m_cxl_id_str(itostr((unsigned int)cxl_id)),
     m_cxl_id(cxl_id),
     m_queue_model(NULL),
     m_cxl_bandwidth(8 * Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_" + m_cxl_id_str + "/bandwidth")),
     m_total_queueing_delay(SubsecondTime::Zero()),
     m_total_access_latency(SubsecondTime::Zero())
 {
-    String cxl_id_str = itostr(cxl_id);
     m_cxl_bandwidth = (8 * Sim()->getCfg()->getFloat(
-                               "perf_model/cxl/memory_expander_" + cxl_id_str +
+                               "perf_model/cxl/memory_expander_" + m_cxl_id_str +
                                "/bandwidth"));  // Convert bytes to bits
     m_cxl_access_cost = SubsecondTime::FS() *
                         static_cast<uint64_t>(TimeConverter<float>::NStoFS(
                             Sim()->getCfg()->getFloat(
-                                "perf_model/cxl/memory_expander_" + cxl_id_str +
-                                "/bandwidth")));  // Operate in fs for higher
+                                "perf_model/cxl/memory_expander_" + m_cxl_id_str +
+                                "/latency")));  // Operate in fs for higher
                                                   // precision before converting
                                                   // to uint64_t/SubsecondTime
 

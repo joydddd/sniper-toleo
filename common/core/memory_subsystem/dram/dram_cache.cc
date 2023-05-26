@@ -9,6 +9,24 @@
 #include "shmem_perf.h"
 #include "prefetcher.h"
 
+// DEBUG:
+#if 1
+#  define MYLOG_ENABLED
+   extern Lock iolock;
+#  include "core_manager.h"
+#  include "simulator.h"
+#  define MYLOG(...) {                                                                    \
+   ScopedLock l(iolock);                                                                  \
+   fflush(stderr);                                                                        \
+   fprintf(stderr, "[%s] %d%cdr %-25s@%3u: ",                                                      \
+   itostr(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD)).c_str(),      \
+         getMemoryManager()->getCore()->getId(),                                          \
+         Sim()->getCoreManager()->amiUserThread() ? '^' : '_', __PRETTY_FUNCTION__, __LINE__);   \
+   fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); fflush(stderr); }
+#else
+#  define MYLOG(...) {}
+#endif
+
 DramCache::DramCache(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, AddressHomeLookup* home_lookup, UInt32 cache_block_size, DramCntlrInterface *dram_cntlr, CXLAddressTranslator* cxl_address_translator)
    : DramCntlrInterface(memory_manager, shmem_perf_model, cache_block_size, cxl_address_translator)
    , m_core_id(memory_manager->getCore()->getId())
@@ -77,16 +95,13 @@ DramCache::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, 
 {
    boost::tuple<SubsecondTime, HitWhere::where_t> res = doAccess(Cache::LOAD, address, requester, data_buf, now, perf);
 
-   switch (boost::get<1>(res))
-   {
+   ++m_reads;
+   switch (boost::get<1>(res)) {
       case HitWhere::DRAM_CACHE:
-          ++m_reads;
           break;
       case HitWhere::DRAM:
-          ++m_read_misses;
-          ++m_reads;
-          break;
       case HitWhere::CXL:
+         ++m_read_misses;
           break;
       default:
           LOG_PRINT_ERROR("DRAM Cache: Invalid HitWhere(%s) for address %p", HitWhereString(boost::get<1>(res)), address);
@@ -100,17 +115,15 @@ boost::tuple<SubsecondTime, HitWhere::where_t>
 DramCache::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now)
 {
    boost::tuple<SubsecondTime, HitWhere::where_t> res = doAccess(Cache::STORE, address, requester, data_buf, now, NULL);
-
+   
+   ++m_writes;
    switch (boost::get<1>(res))
    {
       case HitWhere::DRAM_CACHE:
-          ++m_writes;
           break;
       case HitWhere::DRAM:
-          ++m_write_misses;
-          ++m_writes;
-          break;
       case HitWhere::CXL:
+         ++m_write_misses;
           break;
       default:
           LOG_PRINT_ERROR("DRAM Cache: Invalid HitWhere(%s) for address %p", HitWhereString(boost::get<1>(res)), address);
@@ -268,24 +281,6 @@ DramCache::callPrefetcher(IntPtr train_address, bool cache_hit, bool prefetch_hi
 }
 
 void
-DramCache::handleMsgFromCXL(core_id_t sender, PrL1PrL2DramDirectoryMSI::ShmemMsg* shmem_msg){
-   PrL1PrL2DramDirectoryMSI::ShmemMsg::msg_t shmem_msg_type = shmem_msg->getMsgType();
-   SubsecondTime msg_time = getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD);
-   switch(shmem_msg_type)
-   {
-      case PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_READ_REP:
-      {
-         IntPtr address = shmem_msg->getAddress();
-         core_id_t requester = shmem_msg->getRequester();
-         Byte* data_buf = shmem_msg->getDataBuf();
-         insertLine(Cache::LOAD, address, requester, data_buf, msg_time);
-         break;
-      }
-
-      default:
-      {
-         LOG_PRINT_ERROR("Unrecognized CXL message type(%u)", shmem_msg_type);
-         break;
-      }
-   }
+DramCache::handleDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
+   insertLine(Cache::LOAD, address, requester, data_buf, now);
 }

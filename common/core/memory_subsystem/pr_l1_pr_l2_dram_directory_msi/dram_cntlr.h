@@ -33,7 +33,6 @@ namespace PrL1PrL2DramDirectoryMSI
          UInt64 m_reads, m_writes;
 
          FILE* f_trace; 
-         CXLAddressTranslator* m_address_translator;
          std::vector<CXLCntlrInterface*> m_cxl_cntlr_list;
 
          SubsecondTime runDramPerfModel(core_id_t requester, SubsecondTime time, IntPtr address, DramCntlrInterface::access_t access_type, ShmemPerf *perf);
@@ -54,5 +53,6 @@ namespace PrL1PrL2DramDirectoryMSI
          // Run DRAM performance model. Pass in begin time, returns latency
          boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
          boost::tuple<SubsecondTime, HitWhere::where_t> putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
+         void handleDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now) {}
    };
 }

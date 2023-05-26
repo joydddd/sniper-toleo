@@ -33,8 +33,8 @@ CXLCntlr::CXLCntlr(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf
      for (cxl_id_t cxl_id = 0; cxl_id < cxl_connected.size(); ++cxl_id) {
          if (cxl_connected[cxl_id]) {
              registerStatsMetric("cxl", cxl_id, "reads", &m_reads[cxl_id]);
-             registerStatsMetric("cxl", cxl_id, "writes", &m_reads[cxl_id]);
-             /* Create CXL perf model */
+             registerStatsMetric("cxl", cxl_id, "writes", &m_writes[cxl_id]);
+             /* Create CXL perf model */;
              m_cxl_perf_models[cxl_id] = new CXLPerfModel(cxl_id, cache_block_size);
          }
      }
@@ -77,7 +77,7 @@ CXLCntlr::putDataToCXL(IntPtr address, cxl_id_t cxl_id, core_id_t requester, Byt
    SubsecondTime cxl_latency = m_cxl_perf_models[cxl_id]->getAccessLatency(now, pkt_size, requester, address, WRITE, &m_dummy_shmem_perf);
 
    ++m_writes[cxl_id];
-   MYLOG("[%d]W @ %08lx", requester, address);
+   MYLOG("[%d]W @ %08lx latency %s", requester, address, itostr(cxl_latency.getNS()).c_str());
 
    return boost::tuple<SubsecondTime, HitWhere::where_t>(cxl_latency, HitWhere::CXL);
 }

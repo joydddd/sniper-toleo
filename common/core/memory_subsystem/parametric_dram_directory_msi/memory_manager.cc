@@ -20,7 +20,7 @@
    extern Lock iolock;
 #  include "core_manager.h"
 #  include "simulator.h"
-#  define MYLOG(...) { ScopedLock l(iolock); fflush(stderr); fprintf(stderr, "[%s] %d%cmm %-25s@%03u: ", itostr(getShmemPerfModel()->getElapsedTime()).c_str(), getCore()->getId(), Sim()->getCoreManager()->amiUserThread() ? '^' : '_', __FUNCTION__, __LINE__); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); fflush(stderr); }
+#  define MYLOG(...) { ScopedLock l(iolock); fflush(stderr); fprintf(stderr, "[%s] %d%cmm %-25s@%03u: ", itostr(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD)).c_str(), getCore()->getId(), Sim()->getCoreManager()->amiUserThread() ? '^' : '_', __FUNCTION__, __LINE__); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); fflush(stderr); }
 #else
 #  define MYLOG(...) {}
 #endif
@@ -194,11 +194,11 @@ MemoryManager::MemoryManager(Core* core,
       // Page Translation
       system_page_translation_enable = Sim()->getCfg()->getBool("system/addr_trans/enable");
       if (system_page_translation_enable){
-         system_page_size = Sim()->getCfg()->getInt("system/addr_trans/page_size") * 1024;
+         system_page_size = Sim()->getCfg()->getInt("system/addr_trans/page_size") * 1024; // in Bytes
       }
 
       // CXL
-      cxl_enable = Sim()->getCfg()->getBool("cxl/enable");
+      cxl_enable = Sim()->getCfg()->getBool("perf_model/cxl/enable");
 
    }
    catch(...)
@@ -209,15 +209,16 @@ MemoryManager::MemoryManager(Core* core,
    m_user_thread_sem = new Semaphore(0);
    m_network_thread_sem = new Semaphore(0);
 
-   SInt32 num_cxl_cntlr = 0;
+   UInt32 num_cxl_memory_expander = 0;
    std::vector<core_id_t> cxl_dev_cntlr_id_mapping; // cxl id to core id with cxl cntlr mapping
    std::vector<UInt64> cxl_memory_expander_size_list; // memory expander size, in Bytes
    if (cxl_enable) {
-      num_cxl_cntlr = Sim()->getCfg()->getInt("perf_model/cxl/num_cxl_cntlr");
-      for (int i = 0; i < num_cxl_cntlr; i++) {
-         String memory_expander_name = itostr(i);
-         cxl_dev_cntlr_id_mapping.push_back(Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_"+ memory_expander_name + "/cxl_cntlr_node"));
-         cxl_memory_expander_size_list.push_back(Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_"+ memory_expander_name + "/size"));
+      num_cxl_memory_expander = Sim()->getCfg()->getInt("perf_model/cxl/num_memory_expanders");
+      for (cxl_id_t i = 0; i < num_cxl_memory_expander; i++) {
+         String memory_expander_name = itostr((unsigned int)i);
+         memory_expander_name = "perf_model/cxl/memory_expander_"+ memory_expander_name;
+         cxl_dev_cntlr_id_mapping.push_back(Sim()->getCfg()->getInt(memory_expander_name + "/cxl_cntlr_node"));
+         cxl_memory_expander_size_list.push_back(Sim()->getCfg()->getInt(memory_expander_name + "/size") * 1000 * 1000 * 1000);
       }
    }
 
@@ -229,7 +230,7 @@ MemoryManager::MemoryManager(Core* core,
    if (!m_address_translator && system_page_translation_enable){
       UInt64 dram_total_size = 0;
       for (auto it = core_list_with_dram_controllers.begin(); it != core_list_with_dram_controllers.end(); it++){
-         dram_total_size += Sim()->getCfg()->getIntArray("perf_model/dram/size_perf_dram_cntlr", *it);
+         dram_total_size += Sim()->getCfg()->getIntArray("perf_model/dram/per_controller_size", *it) * 1000 * 1000 * 1000;
       }
 
       m_address_translator = new CXLAddressTranslator(cxl_memory_expander_size_list, cxl_dev_cntlr_id_mapping, system_page_size, dram_total_size);
@@ -292,9 +293,10 @@ MemoryManager::MemoryManager(Core* core,
    {
       m_dram_cntlr_present = true;
 
-      m_dram_cntlr = new PrL1PrL2DramDirectoryMSI::DramCntlr(this,
-            getShmemPerfModel(),
-            getCacheBlockSize(), m_address_translator);
+      LOG_ASSERT_ERROR(system_page_translation_enable || !m_address_translator,
+                  "Address translator should be NULL when not enabled");
+      m_dram_cntlr = new PrL1PrL2DramDirectoryMSI::DramCntlr(
+          this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator);
       Sim()->getStatsManager()->logTopology("dram-cntlr", core->getId(), core->getId());
 
       if (Sim()->getCfg()->getBoolArray("perf_model/dram/cache/enabled", core->getId()))
@@ -461,7 +463,10 @@ MemoryManager::~MemoryManager()
    delete m_tag_directory_home_lookup;
    delete m_dram_controller_home_lookup;
 
-   if (m_address_translator) delete m_address_translator;
+   if (m_address_translator) {
+      delete m_address_translator;
+      m_address_translator = NULL;
+   }
 
    for(i = MemComponent::FIRST_LEVEL_CACHE; i <= (UInt32)m_last_level_cache; ++i)
    {
@@ -578,20 +583,9 @@ MYLOG("begin");
 
             case MemComponent::CXL:
             {
-               if (m_dram_cache){
-                   m_dram_cache->handleMsgFromCXL(sender, shmem_msg);
-               }
-               shmem_msg->getPerf()->updateTime(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD));
-               core_id_t tag_dir_core_id = m_tag_directory_home_lookup->getHome(shmem_msg->getAddress());
-               // forward message to TAG_DIR
-               sendMsg(PrL1PrL2DramDirectoryMSI::ShmemMsg::DRAM_READ_REP,
-                       MemComponent::DRAM, MemComponent::TAG_DIR,
-                       shmem_msg->getRequester(), /* requester */
-                       tag_dir_core_id,           /* receiver */
-                       shmem_msg->getAddress(), shmem_msg->getDataBuf(),
-                       getCacheBlockSize(), 
-                       shmem_msg->getWhere(),
-                       shmem_msg->getPerf(), ShmemPerfModel::_SIM_THREAD);
+               DramCntlrInterface* dram_interface = m_dram_cache ? (DramCntlrInterface*)m_dram_cache : (DramCntlrInterface*)m_dram_cntlr;
+               core_id_t tag_dir = m_tag_directory_home_lookup->getHome(shmem_msg->getAddress());
+               dram_interface->handleMsgFromCXLCntlr(tag_dir, shmem_msg);
                break;
             }
 

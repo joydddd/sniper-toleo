@@ -2,7 +2,7 @@
 #define __CXL_ADDRESS_TRANSLATION_H__
 
 #include <vector>
-#include <map>
+#include <unordered_map>
 
 #include "fixed_types.h"
 
@@ -14,7 +14,7 @@
 class CXLAddressTranslator
 {
    public:
-      CXLAddressTranslator(std::vector<UInt64>& cxl_memory_expander_size, std::vector<core_id_t>& cxl_cntlr_core_list, UInt32 m_page_size, UInt64 dram_total_size);
+      CXLAddressTranslator(std::vector<UInt64> cxl_memory_expander_size, std::vector<core_id_t> cxl_cntlr_core_list, UInt32 page_size, UInt64 dram_total_size);
       ~CXLAddressTranslator();
       // Return cxl node for a given address
       cxl_id_t getHome(IntPtr address);
@@ -25,14 +25,17 @@ class CXLAddressTranslator
       // Within cxl node, return unique, incrementing address to be used in cache set selection
       IntPtr getLinearAddress(IntPtr address);
 
-   private:
+      void printPageUsage();
+      void printPageTable();
+
+     private:
       UInt32 m_num_cxl_devs;
-      UInt64 m_dram_size;
-      UInt32 m_page_size;
+      UInt64 m_dram_size; // in Bytes
+      UInt32 m_page_size; // in Bytes
       UInt32 m_page_offset;
 
-      std::map<IntPtr, IntPtr> m_addr_map; // mapping Virtual Page Number to CXL Node + Linear Page Number
-      std::vector<UInt64> m_cxl_dev_size;
+      std::unordered_map<IntPtr, IntPtr> m_addr_map; // mapping Virtual Page Number to CXL Node + Linear Page Number
+      std::vector<UInt64> m_cxl_dev_size; // in Bytes
       std::vector<UInt64> m_num_allocated_pages;
       std::vector<core_id_t> m_cxl_cntlr_core_list;
 
@@ -41,7 +44,8 @@ class CXLAddressTranslator
       IntPtr allocatePage(IntPtr vpn); // return physical page number
       IntPtr getPPN(IntPtr address);
 
-      cxl_id_t m_last_allocated;
+
+      cxl_id_t m_last_allocated; // home mapped to m_num_cxl_devs
       FILE* f_page_table;
 };
 
