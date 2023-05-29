@@ -4,8 +4,7 @@
 #include "shmem_perf.h"
 #include "log.h"
 
-// DEBUG:
-#if 1
+#if 0
 #  define MYLOG_ENABLED
    extern Lock iolock;
 #  include "core_manager.h"
