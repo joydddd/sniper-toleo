@@ -1,15 +1,18 @@
 #include "cxl_cntlr.h"
+#include "config.h"
+#include "config.hpp"
 #include "stats.h"
+#include "shmem_perf.h"
 
 #if 1
 #  define MYLOG_ENABLED
    extern Lock iolock;
 #  include "core_manager.h"
 #  include "simulator.h"
-#  define MYLOG(...) {                                                                    \
+#  define MYLOG(...) if (enable_trace){                                                   \
    ScopedLock l(iolock);                                                                  \
-   fflush(f_trace);                                                                        \
-   fprintf(f_trace, "[%s] %d%cdr %-25s@%3u: ",                                                      \
+   fflush(f_trace);                                                                       \
+   fprintf(f_trace, "[%s] %d%cdr %-25s@%3u: ",                                            \
    itostr(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD)).c_str(),      \
          getMemoryManager()->getCore()->getId(),                                          \
          Sim()->getCoreManager()->amiUserThread() ? '^' : '_', __FUNCTION__, __LINE__);   \
@@ -22,7 +25,9 @@ CXLCntlr::CXLCntlr(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf
     CXLCntlrInterface(memory_manager, shmem_perf_model, cache_block_size, cxl_address_tranlator),
     m_cxl_connected(cxl_connected),
     m_reads(NULL),
-    m_writes(NULL)
+    m_writes(NULL),
+    f_trace(NULL),
+    enable_trace(false)
 {
      m_reads = (UInt64*) malloc(sizeof(UInt64)*cxl_connected.size());
      memset(m_reads, 0, sizeof(UInt64)*cxl_connected.size());
@@ -34,8 +39,20 @@ CXLCntlr::CXLCntlr(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf
          if (cxl_connected[cxl_id]) {
              registerStatsMetric("cxl", cxl_id, "reads", &m_reads[cxl_id]);
              registerStatsMetric("cxl", cxl_id, "writes", &m_writes[cxl_id]);
+             String cxl_id_str = itostr((unsigned int)cxl_id);
+             ComponentBandwidth cxl_banchwidth =
+                 8 * Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_" +
+                                           cxl_id_str + "/bandwidth");  // Convert bytes to bits
+             SubsecondTime cxl_access_cost = SubsecondTime::FS() *
+                        static_cast<uint64_t>(TimeConverter<float>::NStoFS(
+                            Sim()->getCfg()->getFloat(
+                                "perf_model/cxl/memory_expander_" + cxl_id_str +
+                                "/latency")));     // Operate in fs for higher
+                                                   // precision before converting
+                                                   // to uint64_t/SubsecondTime
              /* Create CXL perf model */;
-             m_cxl_perf_models[cxl_id] = new CXLPerfModel(cxl_id, cache_block_size);
+             m_cxl_perf_models[cxl_id] = new CXLPerfModel(cxl_id, cxl_banchwidth, cxl_access_cost, cache_block_size * 8);
+                                                                                                   /* convert from bytes to bits*/
          }
      }
 
@@ -60,9 +77,13 @@ CXLCntlr::~CXLCntlr()
 }
 
 
-boost::tuple<SubsecondTime, HitWhere::where_t> CXLCntlr::getDataFromCXL(IntPtr address, cxl_id_t cxl_id, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
-   UInt64 pkt_size = getCacheBlockSize();
-   SubsecondTime cxl_latency = m_cxl_perf_models[cxl_id]->getAccessLatency(now, pkt_size, requester, address, READ, perf);
+boost::tuple<SubsecondTime, HitWhere::where_t> CXLCntlr::getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
+   cxl_id_t cxl_id = m_address_translator->getHome(address);
+   IntPtr local_address = m_address_translator->getLinearAddress(address);
+   UInt64 pkt_size = getCacheBlockSize() * 8; /* Byte to bits */
+
+   LOG_ASSERT_ERROR(m_cxl_connected[cxl_id], "CXL %d is not connected", cxl_id);
+   SubsecondTime cxl_latency = m_cxl_perf_models[cxl_id]->getAccessLatency(now, pkt_size, requester, local_address, READ, perf);
 
    ++m_reads[cxl_id];
    MYLOG("[%d]R @ %08lx latency %s", requester, address, itostr(cxl_latency.getNS()).c_str());
@@ -72,9 +93,13 @@ boost::tuple<SubsecondTime, HitWhere::where_t> CXLCntlr::getDataFromCXL(IntPtr a
 
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
-CXLCntlr::putDataToCXL(IntPtr address, cxl_id_t cxl_id, core_id_t requester, Byte* data_buf, SubsecondTime now){
-   UInt64 pkt_size = getCacheBlockSize();
-   SubsecondTime cxl_latency = m_cxl_perf_models[cxl_id]->getAccessLatency(now, pkt_size, requester, address, WRITE, &m_dummy_shmem_perf);
+CXLCntlr::putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
+   cxl_id_t cxl_id = m_address_translator->getHome(address);
+   IntPtr local_address = m_address_translator->getLinearAddress(address);
+   UInt64 pkt_size = getCacheBlockSize() * 8;/* Byte to bits */
+
+   LOG_ASSERT_ERROR(m_cxl_connected[cxl_id], "CXL %d is not connected", cxl_id);
+   SubsecondTime cxl_latency = m_cxl_perf_models[cxl_id]->getAccessLatency(now, pkt_size, requester, local_address, WRITE, &m_dummy_shmem_perf);
 
    ++m_writes[cxl_id];
    MYLOG("[%d]W @ %08lx latency %s", requester, address, itostr(cxl_latency.getNS()).c_str());
@@ -89,7 +114,8 @@ void CXLCntlr::enablePerfModel()
          assert(m_cxl_perf_models[cxl_id]);
          m_cxl_perf_models[cxl_id]->enable();
       }
-   } 
+   }
+   enable_trace = true;
 }
 
 void CXLCntlr::disablePerfModel() 
@@ -100,4 +126,5 @@ void CXLCntlr::disablePerfModel()
          m_cxl_perf_models[cxl_id]->disable();
       }
    } 
+   enable_trace = false;
 }

@@ -33,6 +33,8 @@ class CXLCntlrInterface
       {
          READ = 0,
          WRITE,
+         VN_READ,
+         VN_UPDATE,
          NUM_ACCESS_TYPES
       } access_t;
 
@@ -44,9 +46,12 @@ class CXLCntlrInterface
       {}
       virtual ~CXLCntlrInterface() {}
 
-      virtual boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromCXL(IntPtr address, cxl_id_t cxl_id, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf) = 0;
-      virtual boost::tuple<SubsecondTime, HitWhere::where_t> putDataToCXL(IntPtr address, cxl_id_t cxl_id, core_id_t requester, Byte* data_buf, SubsecondTime now) = 0;
+      virtual boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf) = 0;
+      virtual boost::tuple<SubsecondTime, HitWhere::where_t> putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now) = 0;
 
+      virtual void enablePerfModel() = 0;
+      virtual void disablePerfModel() = 0;
+      
       void handleMsgFromDram(core_id_t sender, PrL1PrL2DramDirectoryMSI::ShmemMsg* shmem_msg);
 };
 

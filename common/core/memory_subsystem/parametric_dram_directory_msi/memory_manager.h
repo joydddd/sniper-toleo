@@ -35,7 +35,7 @@ namespace ParametricDramDirectoryMSI
          DramCache* m_dram_cache;
          PrL1PrL2DramDirectoryMSI::DramDirectoryCntlr* m_dram_directory_cntlr;
          PrL1PrL2DramDirectoryMSI::DramCntlr* m_dram_cntlr;
-         CXLCntlr* m_cxl_cntlr;
+         CXLCntlrInterface* m_cxl_cntlr;
          static CXLAddressTranslator* m_address_translator; // Global Address Translator
          AddressHomeLookup* m_tag_directory_home_lookup;
          AddressHomeLookup* m_dram_controller_home_lookup;

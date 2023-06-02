@@ -173,6 +173,29 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     if 'cxl-queue.total-time-used' in results:
       results['cxl.bandwidth'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['cxl-queue.total-time-used'])
       template.append(('  average cxl bandwidth utilization', 'cxl.bandwidth', lambda v: '%.2f%%' % v))
+  
+  if 'mee.encrypts' in results:
+    results['mee.accesses'] = map(sum, zip(results['mee.encrypts'], results['mee.decrypts'], results['mee.macs']))
+    results['mee.avglatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['mee.total-crypto-latency'], results['mee.accesses']))
+    template += [
+      ('MEE summary', '', ''),
+      ('  num mee crypto', 'mee.accesses', str),
+      ('  average mee crypto latency (ns)', 'mee.avglatency', format_ns(2)),
+    ]
+    if 'mee.total-encrypt-queueing-delay' in results:
+      results['mee.avgqueueencrypt'] = map(lambda (a,b): a/(b or 1), zip(results['mee.total-encrypt-queueing-delay'], results['mee.encrypts']))
+      results['mee.avgqueuedecrypt'] = map(lambda (a,b): a/(b or 1), zip(results['mee.total-decrypt-queueing-delay'], results['mee.decrypts']))
+      results['mee.avgqueuemac'] = map(lambda (a,b): a/(b or 1), zip(results['mee.total-mac-queueing-delay'], results['mee.macs']))
+      template.append(('  average mee encrypt queueing delay', 'mee.avgqueueencrypt', format_ns(2)))
+      template.append(('  average mee decrypt queueing delay', 'mee.avgqueuedecrypt', format_ns(2)))
+      template.append(('  average mee mac queueing delay', 'mee.avgqueuemac', format_ns(2)))
+    else:
+      results['mee.avgqueue'] = map(lambda (a,b): a/(b or 1), zip(results.get('mee.total-queueing-delay', [0]*ncores), results['mee.accesses']))
+      template.append(('  average mee queueing delay', 'mee.avgqueue', format_ns(2)))
+    if 'mee-queue.total-time-used' in results:
+      results['mee.bandwidth'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['mee-queue.total-time-used'])
+      template.append(('  average mee bandwidth utilization', 'mee.bandwidth', lambda v: '%.2f%%' % v))
+
     
   
   if 'L1-D.loads-where-dram-local' in results:

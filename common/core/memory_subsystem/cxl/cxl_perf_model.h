@@ -12,7 +12,6 @@ class CXLPerfModel
       bool m_enabled;
       UInt64 m_num_accesses;
 
-      String m_cxl_id_str;
       cxl_id_t m_cxl_id;
 
       QueueModel* m_queue_model;
@@ -24,7 +23,7 @@ class CXLPerfModel
 
 
      public:
-      CXLPerfModel(cxl_id_t cxl_id, UInt64 cache_block_size);
+      CXLPerfModel(cxl_id_t cxl_id, ComponentBandwidth cxl_banchwidth, SubsecondTime cxl_access_cost, UInt64 cache_block_size /* in bits */);
       ~CXLPerfModel();
       SubsecondTime getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size,
                                      core_id_t requester, IntPtr address,

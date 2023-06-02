@@ -36,19 +36,17 @@ void CXLCntlrInterface::handleMsgFromDram(core_id_t sender, PrL1PrL2DramDirector
          SubsecondTime cxl_latency;
          HitWhere::where_t hit_where;
 
-         IntPtr linear_address = m_address_translator->getLinearAddress(address);
-         cxl_id_t cxl_id = m_address_translator->getHome(address);
          
-         MYLOG("[cxl %d] handle R @%016lx, ##local addr## %016lx\n", cxl_id, address, linear_address);
+         MYLOG("[cxl] handle R @%016lx\n",address);
 
-         boost::tie(cxl_latency, hit_where) = getDataFromCXL(linear_address, cxl_id, shmem_msg->getRequester(), data_buf, msg_time, shmem_msg->getPerf());
+         boost::tie(cxl_latency, hit_where) = getDataFromCXL(address, shmem_msg->getRequester(), data_buf, msg_time, shmem_msg->getPerf());
 
          getShmemPerfModel()->incrElapsedTime(cxl_latency, ShmemPerfModel::_SIM_THREAD);
 
          shmem_msg->getPerf()->updateTime(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD),
             ShmemPerf::CXL);
 
-         MYLOG("[cxl %d] send R REP to [dram cntlr %d] @%016lx\n", cxl_id, sender, address);
+         MYLOG("[cxl] send R REP to [dram cntlr %d] @%016lx\n", sender, address);
          getMemoryManager()->sendMsg(PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_READ_REP,
                MemComponent::CXL, MemComponent::DRAM,
                shmem_msg->getRequester() /* requester */,
@@ -62,10 +60,8 @@ void CXLCntlrInterface::handleMsgFromDram(core_id_t sender, PrL1PrL2DramDirector
       case PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_WRITE_REQ:
       {
          IntPtr address = shmem_msg->getAddress();
-         cxl_id_t cxl_id = m_address_translator->getHome(address);
-         IntPtr linear_address = m_address_translator->getLinearAddress(address);
-         MYLOG("[cxl %d] handle W @%016lx, ##local addr## %016lx\n", cxl_id, address, linear_address);
-         putDataToCXL(linear_address, cxl_id, shmem_msg->getRequester(), shmem_msg->getDataBuf(), msg_time);
+         MYLOG("[cxl] handle W @%016lx\n", address);
+         putDataToCXL(address, shmem_msg->getRequester(), shmem_msg->getDataBuf(), msg_time);
 
          // DRAM latency is ignored on write
 

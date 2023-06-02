@@ -48,6 +48,8 @@ tools/pinversion
 # result files
 results/
 !results/.DO_NOT_DELETE
+*.trace
+*.svg
 
 # dependencies
 boost_1_38_0

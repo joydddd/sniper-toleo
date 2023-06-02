@@ -20,6 +20,7 @@ class HitWhere
          MISS,
          NUCA_CACHE,
          DRAM_CACHE,
+         MEE_CACHE,
          DRAM,
          CXL,
          DRAM_LOCAL,

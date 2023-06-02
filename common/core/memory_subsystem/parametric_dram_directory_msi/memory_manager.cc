@@ -3,7 +3,8 @@
 #include "cache_base.h"
 #include "nuca_cache.h"
 #include "dram_cache.h"
-#include "cxl_cntlr.h"
+#include "cxl_vnserver_cntlr.h"
+#include "mee_naive.h"
 #include "tlb.h"
 #include "simulator.h"
 #include "log.h"
@@ -74,6 +75,7 @@ MemoryManager::MemoryManager(Core* core,
 
    // CXL
    bool cxl_enable = false;
+   bool cxl_vnserver_enable = false;
    
 
    try
@@ -199,6 +201,8 @@ MemoryManager::MemoryManager(Core* core,
 
       // CXL
       cxl_enable = Sim()->getCfg()->getBool("perf_model/cxl/enable");
+      if (cxl_enable)
+         cxl_vnserver_enable = Sim()->getCfg()->getBool("perf_model/cxl/vnserver/enable");
 
    }
    catch(...)
@@ -249,8 +253,13 @@ MemoryManager::MemoryManager(Core* core,
          }
       }
       Sim()->getStatsManager()->logTopology("cxl-cntlr", core->getId(), core->getId());
-      /* TODO: Initialize CXL devices */
-      m_cxl_cntlr = new CXLCntlr(this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator, cxl_dev_connected);
+      CXLCntlr* cxl_cntlr = new CXLCntlr(this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator, cxl_dev_connected);
+      if (cxl_vnserver_enable) {
+         MEEBase* mee = new MEENaive(getCore()->getId() + 1);
+         m_cxl_cntlr = new CXLVNServerCntlr(this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator, cxl_cntlr, mee);
+      } else {
+         m_cxl_cntlr = cxl_cntlr;
+      }
    }
 
 
