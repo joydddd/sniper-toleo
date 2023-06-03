@@ -18,7 +18,9 @@
 #include <map>
 
 class DramCache;
+class DramMEECntlr;
 class ShmemPerf;
+class CXLVNServerCntlr;
 
 namespace ParametricDramDirectoryMSI
 {
@@ -33,9 +35,11 @@ namespace ParametricDramDirectoryMSI
          CacheCntlr* m_cache_cntlrs[MemComponent::LAST_LEVEL_CACHE + 1];
          NucaCache* m_nuca_cache;
          DramCache* m_dram_cache;
+         DramMEECntlr* m_dram_mee_cntlr;
          PrL1PrL2DramDirectoryMSI::DramDirectoryCntlr* m_dram_directory_cntlr;
          PrL1PrL2DramDirectoryMSI::DramCntlr* m_dram_cntlr;
-         CXLCntlrInterface* m_cxl_cntlr;
+         CXLCntlr* m_cxl_cntlr;
+         CXLVNServerCntlr* m_cxl_vnserver_cntlr;
          static CXLAddressTranslator* m_address_translator; // Global Address Translator
          AddressHomeLookup* m_tag_directory_home_lookup;
          AddressHomeLookup* m_dram_controller_home_lookup;

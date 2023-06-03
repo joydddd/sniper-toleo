@@ -41,7 +41,7 @@ void DramCntlrInterface::handleMsgFromTagDirectory(core_id_t sender, PrL1PrL2Dra
 
          getShmemPerfModel()->incrElapsedTime(dram_latency, ShmemPerfModel::_SIM_THREAD);
          
-         if (hit_where != HitWhere::CXL){
+         if (hit_where != HitWhere::CXL && hit_where != HitWhere::CXL_VN){
             shmem_msg->getPerf()->updateTime(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD),
                hit_where == HitWhere::DRAM_CACHE ? ShmemPerf::DRAM_CACHE : ShmemPerf::DRAM);
             MYLOG("[dram cntlr %d] send R REP to [tag dir %d] @%016lx\n", getMemoryManager()->getCore()->getId(), sender, address);
@@ -86,7 +86,7 @@ DramCntlrInterface::handleMsgFromCXLCntlr(core_id_t tag_dir, PrL1PrL2DramDirecto
          MYLOG("[dram cntlr %d] handle CXL R REP @%016lx\n", getMemoryManager()->getCore()->getId(), address);
 
          // write to dram cache. Latency is ignored for cache write.
-         handleDataFromCXL(shmem_msg->getAddress(), shmem_msg->getRequester(), shmem_msg->getDataBuf(), msg_time);
+         handleDataFromCXL(address, shmem_msg->getRequester(), shmem_msg->getDataBuf(), msg_time, shmem_msg->getPerf());
          
          // forward message to TAG_DIR
          MYLOG("[dram cntlr %d] send R REP (forward cxl) to [tag dir %d] @%016lx\n", getMemoryManager()->getCore()->getId(), tag_dir, address);
@@ -98,6 +98,39 @@ DramCntlrInterface::handleMsgFromCXLCntlr(core_id_t tag_dir, PrL1PrL2DramDirecto
                   getCacheBlockSize(), 
                   shmem_msg->getWhere(),
                   shmem_msg->getPerf(), ShmemPerfModel::_SIM_THREAD);
+         break;
+      }
+
+      case PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_REP:
+      {
+         IntPtr address = shmem_msg->getAddress();
+         MYLOG("[dram cntlr %d] handle CXL VN REP @%016lx\n", getMemoryManager()->getCore()->getId(), address);
+         
+         // verify VN and write to dram_cache. 
+         SubsecondTime verify_latency = handleVNverifyFromCXL(address, shmem_msg->getRequester(), shmem_msg->getDataBuf(), msg_time, shmem_msg->getPerf());
+
+         // forward message to TAG_DIR
+         getShmemPerfModel()->incrElapsedTime(verify_latency, ShmemPerfModel::_SIM_THREAD);
+         shmem_msg->getPerf()->updateTime(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD), ShmemPerf::MEE);
+         MYLOG("[dram cntlr %d] send R REP (forward cxl) to [tag dir %d] @%016lx\n", getMemoryManager()->getCore()->getId(), tag_dir, address);
+         getMemoryManager()->sendMsg(PrL1PrL2DramDirectoryMSI::ShmemMsg::DRAM_READ_REP,
+                  MemComponent::DRAM, MemComponent::TAG_DIR,
+                  shmem_msg->getRequester(), /* requester */
+                  tag_dir,           /* receiver */
+                  shmem_msg->getAddress(), shmem_msg->getDataBuf(),
+                  getCacheBlockSize(), 
+                  shmem_msg->getWhere(),
+                  shmem_msg->getPerf(), ShmemPerfModel::_SIM_THREAD);
+
+         break;
+      }
+
+      case PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_UPDATE_REP:
+      {
+         IntPtr address = shmem_msg->getAddress();
+         MYLOG("[dram cntlr %d] handle CXL VN UPDATE REP @%016lx\n", getMemoryManager()->getCore()->getId(), address);
+         /* gen MAC, encrypt and write to DRAM */
+         handleVNUpdateFromCXL(address, shmem_msg->getRequester(), shmem_msg->getDataBuf(), msg_time);
          break;
       }
 

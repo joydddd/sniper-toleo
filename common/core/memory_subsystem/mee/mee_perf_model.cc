@@ -16,12 +16,11 @@ MEEPerfModel::MEEPerfModel(core_id_t mee_id):
     m_total_queueing_delay(SubsecondTime::Zero()),
     m_total_crypto_latency(SubsecondTime::Zero())
 {
-    m_queue_model = QueueModel::create("mme-queue", m_mee_id, Sim()->getCfg()->getString("perf_model/mee/queue_type"), m_aes_bandwidth.getRoundedLatency(1));
+    m_queue_model = QueueModel::create("mee-queue", m_mee_id, Sim()->getCfg()->getString("perf_model/mee/queue_type"), m_aes_bandwidth.getRoundedLatency(1));
 
     registerStatsMetric("mee", m_mee_id, "total-crypto-latency", &m_total_crypto_latency);
     registerStatsMetric("mee", m_mee_id, "total-queueing-delay", &m_total_queueing_delay);
 
-    fprintf(stderr, "aes latency %ld ns\n", m_aes_latency.getNS());
 }
 
 MEEPerfModel::~MEEPerfModel()

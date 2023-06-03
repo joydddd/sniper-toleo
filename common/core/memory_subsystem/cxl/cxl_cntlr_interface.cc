@@ -68,6 +68,47 @@ void CXLCntlrInterface::handleMsgFromDram(core_id_t sender, PrL1PrL2DramDirector
          break;
       }
 
+      case PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_REQ:
+      {
+         LOG_ASSERT_ERROR(m_vn_server_enabled, "CXL VN Server is not enabled, cannot handle CXL_VN_REQ");
+         IntPtr address = shmem_msg->getAddress();
+         Byte data_buf[getVNBlockSize()];
+         MYLOG("[cxl] handle VN REQ @%016lx\n", address);
+         SubsecondTime vn_access_latency = getVNFromCXL(address, shmem_msg->getRequester(), data_buf, msg_time, shmem_msg->getPerf());
+         getShmemPerfModel()->incrElapsedTime(vn_access_latency, ShmemPerfModel::_SIM_THREAD);
+         shmem_msg->getPerf()->updateTime(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD), ShmemPerf::VN);
+
+         MYLOG("[cxl] send VN REP to [dram cntlr %d] @%016lx\n", sender, address);
+         getMemoryManager()->sendMsg(PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_REP,
+               MemComponent::CXL, MemComponent::DRAM,
+               shmem_msg->getRequester() /* requester */,
+               sender                     /* receiver */,
+               address,
+               data_buf, getVNBlockSize(),
+               shmem_msg->getWhere(), shmem_msg->getPerf(), ShmemPerfModel::_SIM_THREAD);
+         break;
+      }
+
+      case PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_UPDATE:
+      {
+         LOG_ASSERT_ERROR(m_vn_server_enabled, "CXL VN Server is not enabled, cannot handle CXL_VN_UPDATE");
+         IntPtr address = shmem_msg->getAddress();
+         Byte data_buf[getVNBlockSize()];
+         MYLOG("[cxl] handle VN UPDATE @%016lx\n", address);
+         SubsecondTime vn_access_latency = updateVNToCXL(address, shmem_msg->getRequester(), data_buf, msg_time);
+         getShmemPerfModel()->incrElapsedTime(vn_access_latency, ShmemPerfModel::_SIM_THREAD);
+
+         MYLOG("[cxl] send VN REP to [dram cntlr %d] @%016lx\n", sender, address);
+         getMemoryManager()->sendMsg(PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_UPDATE_REP,
+               MemComponent::CXL, MemComponent::DRAM,
+               shmem_msg->getRequester() /* requester */,
+               sender                     /* receiver */,
+               address,
+               data_buf, getVNBlockSize(),
+               shmem_msg->getWhere(), &m_dummy_shmem_perf, ShmemPerfModel::_SIM_THREAD);
+         break;
+      }
+
       default:
          LOG_PRINT_ERROR("Unrecognized Shmem Msg Type: %u", shmem_msg_type);
          break;

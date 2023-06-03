@@ -30,6 +30,13 @@ class CXLCntlr : public CXLCntlrInterface
      boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
      boost::tuple<SubsecondTime, HitWhere::where_t> putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
 
+     SubsecondTime getVNFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf) {
+         LOG_ASSERT_ERROR(false, "getVNFromCXL not implemented");
+     }
+     SubsecondTime updateVNToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now) {
+        LOG_ASSERT_ERROR(false, "getVNFromCXL not implemented");
+     }
+
      void enablePerfModel();
      void disablePerfModel();
 };

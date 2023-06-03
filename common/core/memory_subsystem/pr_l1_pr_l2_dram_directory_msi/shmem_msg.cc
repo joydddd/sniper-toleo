@@ -98,6 +98,8 @@ namespace PrL1PrL2DramDirectoryMSI
          case INV_REP:
          case DRAM_READ_REQ:
          case CXL_READ_REQ:
+         case CXL_VN_REQ:
+         case CXL_VN_UPDATE:
             // msg_type + address
             // msg_type - 1 byte
             return (1 + sizeof(IntPtr));
@@ -110,6 +112,8 @@ namespace PrL1PrL2DramDirectoryMSI
          case DRAM_READ_REP:
          case CXL_READ_REP:
          case CXL_WRITE_REQ:
+         case CXL_VN_REP:
+         case CXL_VN_UPDATE_REP:
             // msg_type + address + cache_block
             return (1 + sizeof(IntPtr) + m_data_length);
 

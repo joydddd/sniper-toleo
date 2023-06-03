@@ -2,6 +2,7 @@
 #include "stats.h"
 #include "config.h"
 #include "config.hpp"
+#include "mee_naive.h"
 
 #if 1
 #  define MYLOG_ENABLED
@@ -22,19 +23,18 @@
 
 CXLVNServerCntlr::CXLVNServerCntlr(
       MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, UInt32 cache_block_size,
-      CXLAddressTranslator* cxl_address_tranlator, CXLCntlr *cxl_cntlr, MEEBase* mee):
+      CXLAddressTranslator* cxl_address_tranlator, CXLCntlr* cxl_cntlr, core_id_t core_id):
     CXLCntlrInterface(memory_manager, shmem_perf_model, cache_block_size, cxl_address_tranlator),
     m_vnserver_cxl_id(cxl_address_tranlator->getnumCXLDevices()),
-    m_vn_length(mee->getVNLength()), // vn_length in bits 
     m_vn_reads(0),
     m_vn_updates(0),
     m_cxl_cntlr(cxl_cntlr),
-    m_mee(mee),
     f_trace(NULL),
     m_enable_trace(false)
 {
    m_cxl_pkt_size = Sim()->getCfg()->getInt("perf_model/cxl/vnserver/pkt_size");
-   m_vn_length = Sim()->getCfg()->getInt("perf_model/mee/vn_length");
+   m_mee = new MEENaive(core_id + 1);
+   m_vn_length = m_mee->getVNLength(); // vn_length in bits
 
    SubsecondTime vnserver_access_cost =
        SubsecondTime::FS() *
@@ -58,6 +58,7 @@ CXLVNServerCntlr::CXLVNServerCntlr(
 
 CXLVNServerCntlr::~CXLVNServerCntlr()
 {
+   if (m_mee) delete m_mee;
 #ifdef MYLOG_ENABLED
    fclose(f_trace);
 #endif // MYLOG_ENABLED
@@ -122,6 +123,14 @@ CXLVNServerCntlr::putDataToCXL(IntPtr address, core_id_t requester, Byte* data_b
            : total_latency + mee_mac_latency;
 
    return boost::make_tuple(total_latency, hit_where);
+}
+
+SubsecondTime CXLVNServerCntlr::getVNFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
+   return getVN(address, requester, data_buf, now, perf);
+}
+
+SubsecondTime CXLVNServerCntlr::updateVNToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
+   return updateVN(address, requester, data_buf, now, NULL);
 }
 
 void CXLVNServerCntlr::enablePerfModel() 

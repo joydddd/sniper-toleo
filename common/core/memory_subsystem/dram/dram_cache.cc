@@ -100,6 +100,7 @@ DramCache::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, 
           break;
       case HitWhere::DRAM:
       case HitWhere::CXL:
+      case HitWhere::CXL_VN:
          ++m_read_misses;
           break;
       default:
@@ -122,6 +123,7 @@ DramCache::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, Su
           break;
       case HitWhere::DRAM:
       case HitWhere::CXL:
+      case HitWhere::CXL_VN:
          ++m_write_misses;
           break;
       default:
@@ -178,7 +180,9 @@ DramCache::doAccess(Cache::access_t access, IntPtr address, core_id_t requester,
          SubsecondTime dram_latency;
          HitWhere::where_t hit_where;
          boost::tie(dram_latency, hit_where) = m_dram_cntlr->getDataFromDram(address, requester, data_buf, now + latency, perf);
-         if (hit_where == HitWhere::CXL){ // data is located on CXL memory expander, request for data has been sent. 
+         if (hit_where == HitWhere::CXL || hit_where == HitWhere::CXL_VN){ 
+            // data is located on CXL memory expander, request for data has been sent. 
+            // data is located on local DRAM, but VN is enabled. request for data on remote dram has been sent. 
             return boost::tuple<SubsecondTime, HitWhere::where_t>(latency, hit_where);
          }
 
@@ -215,7 +219,6 @@ DramCache::insertLine(Cache::access_t access, IntPtr address, core_id_t requeste
    // Writeback to DRAM done off-line, so don't affect return latency
    if (eviction && evict_block_info.getCState() == CacheState::MODIFIED)
    {
-      std::cerr << "evict line" << std::endl;
       m_dram_cntlr->putDataToDram(evict_address, requester, data_buf, now);
    }
 }
@@ -279,7 +282,19 @@ DramCache::callPrefetcher(IntPtr train_address, bool cache_hit, bool prefetch_hi
    }
 }
 
-void
-DramCache::handleDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
+SubsecondTime
+DramCache::handleDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
    insertLine(Cache::LOAD, address, requester, data_buf, now);
+   return SubsecondTime::Zero();
+}
+
+
+SubsecondTime DramCache::handleVNUpdateFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
+   return m_dram_cntlr->handleVNUpdateFromCXL(address, requester, data_buf, now);
+}
+
+SubsecondTime DramCache::handleVNverifyFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
+   SubsecondTime verify_latency = m_dram_cntlr->handleVNverifyFromCXL(address, requester, data_buf, now, perf);
+   handleDataFromCXL(address, requester, data_buf, now + verify_latency, perf);
+   return verify_latency;
 }

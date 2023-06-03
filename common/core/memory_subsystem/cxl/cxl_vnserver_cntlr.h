@@ -29,17 +29,19 @@ class CXLVNServerCntlr : public CXLCntlrInterface
 
      FILE* f_trace;
      bool m_enable_trace;
-
-
-    public:
-     CXLVNServerCntlr(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, UInt32 cache_block_size, CXLAddressTranslator* cxl_address_tranlator, CXLCntlr *cxl_cntlr, MEEBase* mee);
-     ~CXLVNServerCntlr();
-
+     
      SubsecondTime getVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
      SubsecondTime updateVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
 
+    public:
+     CXLVNServerCntlr(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, UInt32 cache_block_size, CXLAddressTranslator* cxl_address_tranlator, CXLCntlr* cxl_cntlr, core_id_t core_id);
+     ~CXLVNServerCntlr();
+
      boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromCXL(IntPtr address,core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
      boost::tuple<SubsecondTime, HitWhere::where_t> putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
+
+     SubsecondTime getVNFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
+     SubsecondTime updateVNToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
 
      void enablePerfModel();
      void disablePerfModel();

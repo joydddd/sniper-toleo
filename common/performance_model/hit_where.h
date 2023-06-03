@@ -23,6 +23,7 @@ class HitWhere
          MEE_CACHE,
          DRAM,
          CXL,
+         CXL_VN,
          DRAM_LOCAL,
          DRAM_REMOTE,
          CACHE_REMOTE,

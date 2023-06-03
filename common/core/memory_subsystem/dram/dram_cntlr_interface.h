@@ -7,6 +7,9 @@
 #include "shmem_msg.h"
 #include "shmem_perf.h"
 #include "cxl_address_translator.h"
+#include "config.h"
+#include "config.hpp"
+#include "simulator.h"
 
 #include "boost/tuple/tuple.hpp"
 
@@ -21,6 +24,7 @@ class DramCntlrInterface
       ShmemPerf m_dummy_shmem_perf;
       CXLAddressTranslator* m_address_translator;
       UInt32 m_cache_block_size;
+      bool m_mee_enabled;
 
       UInt32 getCacheBlockSize() { return m_cache_block_size; }
       MemoryManagerBase* getMemoryManager() { return m_memory_manager; }
@@ -45,13 +49,16 @@ class DramCntlrInterface
          , m_shmem_perf_model(shmem_perf_model)
          , m_address_translator(cxl_address_translator)
          , m_cache_block_size(cache_block_size)
+         , m_mee_enabled(Sim()->getCfg()->getBool("perf_model/mee/enable"))
       {}
       virtual ~DramCntlrInterface() {}
 
       virtual boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf) = 0;
       virtual boost::tuple<SubsecondTime, HitWhere::where_t> putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now) = 0;
 
-      virtual void handleDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now) = 0;
+      virtual SubsecondTime handleDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf) = 0;
+      virtual SubsecondTime handleVNUpdateFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now) = 0;
+      virtual SubsecondTime handleVNverifyFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf) = 0;
 
       void handleMsgFromTagDirectory(core_id_t sender, PrL1PrL2DramDirectoryMSI::ShmemMsg* shmem_msg);
       void handleMsgFromCXLCntlr(core_id_t tag_dir, PrL1PrL2DramDirectoryMSI::ShmemMsg* shmem_msg);
