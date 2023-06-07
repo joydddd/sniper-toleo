@@ -174,7 +174,6 @@ DramCache::insertLine(Cache::access_t access, IntPtr address, core_id_t requeste
    // Writeback to DRAM done off-line, so don't affect return latency
    if (eviction && evict_block_info.getCState() == CacheState::MODIFIED)
    {
-      std::cerr << "evict line" << std::endl;
       m_dram_cntlr->putDataToDram(evict_address, requester, data_buf, now);
    }
 }

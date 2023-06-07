@@ -139,6 +139,7 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
   template += [
     ('DRAM summary', '', ''),
     ('  num dram accesses', 'dram.accesses', str),
+    ('  num dram writes', 'dram.writes', str),
     ('  average dram access latency (ns)', 'dram.avglatency', format_ns(2)),
   ]
   if 'dram.total-read-queueing-delay' in results:

@@ -9,21 +9,23 @@
 #include "config.h"
 #include "config.hpp"
 
-// #if 0
+#if 1
    extern Lock iolock;
 #  include "core_manager.h"
 #  include "simulator.h"
-#  define MYLOG(...) {                                                                    \
+#  include "magic_server.h"
+#  define MYLOG(...) { if (Sim()->getMagicServer()->inROI()){                             \
+   /*std::cerr << "WRITE " << std::endl;  */                                                  \
    ScopedLock l(iolock);                                                                  \
-   fflush(f_trace);                                                                        \
-   fprintf(f_trace, "[%s] %d%cdr %-25s@%3u: ",                                                      \
+   fflush(f_trace);                                                                       \
+   fprintf(f_trace, "[%s] %d%cdr %-25s@%3u: ",                                            \
    itostr(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD)).c_str(),      \
          getMemoryManager()->getCore()->getId(),                                          \
          Sim()->getCoreManager()->amiUserThread() ? '^' : '_', __FUNCTION__, __LINE__);   \
-   fprintf(f_trace, __VA_ARGS__); fprintf(f_trace, "\n"); fflush(f_trace); }
-// #else
-// #  define MYLOG(...) {}
-// #endif
+   fprintf(f_trace, __VA_ARGS__); fprintf(f_trace, "\n"); fflush(f_trace); } }
+#else
+#  define MYLOG(...) {}
+#endif
 
 class TimeDistribution;
 
@@ -106,7 +108,6 @@ DramCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, 
 boost::tuple<SubsecondTime, HitWhere::where_t>
 DramCntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now)
 {
-   std::cerr << "WRITE! " << std::endl;
    if (Sim()->getFaultinjectionManager())
    {
       if (m_data_map[address] == NULL)
@@ -123,9 +124,9 @@ DramCntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, Su
    SubsecondTime dram_access_latency = runDramPerfModel(requester, now, address, WRITE, &m_dummy_shmem_perf);
 
    ++m_writes;
-   #ifdef ENABLE_DRAM_ACCESS_COUNT
+#ifdef ENABLE_DRAM_ACCESS_COUNT
    addToDramAccessCount(address, WRITE);
-   #endif
+#endif
    MYLOG("[%d]W @ %08lx", requester, address);
 
    return boost::tuple<SubsecondTime, HitWhere::where_t>(dram_access_latency, HitWhere::DRAM);
