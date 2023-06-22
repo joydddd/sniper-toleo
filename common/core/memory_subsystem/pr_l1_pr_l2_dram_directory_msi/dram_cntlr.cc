@@ -9,7 +9,7 @@
 #include "config.h"
 #include "config.hpp"
 
-#if 1
+#if 0
 #  define MYLOG_ENABLED
    extern Lock iolock;
 #  include "core_manager.h"
@@ -25,6 +25,18 @@
 #else
 #  define MYLOG(...) {}
 #endif
+
+#if 1
+# define TRACE_ANALYSIS_ENABLED
+   extern Lock iolock;
+#  include "dram_trace_analysis.h"
+#  define TRACE(core, addr, type){ \
+   Sim()->getDramTraceAnalyzer()->RecordDramAccess(core, addr, type); \
+}
+
+#else
+#define TRACE(core, addr, type){}
+#endif 
 
 class TimeDistribution;
 
@@ -118,6 +130,7 @@ DramCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, 
    addToDramAccessCount(address, READ);
    #endif
    MYLOG("[%d]R @ %016lx latency %s", requester, address, itostr(dram_access_latency.getNS()).c_str());
+   TRACE(requester, address, DramCntlrInterface::READ);
 
    return boost::tuple<SubsecondTime, HitWhere::where_t>(dram_access_latency, HitWhere::DRAM);
 }
@@ -167,6 +180,7 @@ DramCntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, Su
    addToDramAccessCount(address, WRITE);
    #endif
    MYLOG("[%d]W @ %016lx", requester, address);
+   TRACE(requester, address, DramCntlrInterface::WRITE);
 
    return boost::tuple<SubsecondTime, HitWhere::where_t>(dram_access_latency, HitWhere::DRAM);
 }

@@ -29,6 +29,8 @@ class FaultinjectionManager;
 class TagsManager;
 class RoutineTracer;
 class MemoryTracker;
+
+class DramTraceAnalyzer;
 namespace config { class Config; }
 
 class Simulator
@@ -70,6 +72,7 @@ public:
    TagsManager *getTagsManager() { return m_tags_manager; }
    RoutineTracer *getRoutineTracer() { return m_rtn_tracer; }
    MemoryTracker *getMemoryTracker() { return m_memory_tracker; }
+   DramTraceAnalyzer *getDramTraceAnalyzer() { return m_dram_trace_analyzer; }
    void setMemoryTracker(MemoryTracker *memory_tracker) { m_memory_tracker = memory_tracker; }
 
    bool isRunning() { return m_running; }
@@ -106,6 +109,8 @@ private:
    FaultinjectionManager *m_faultinjection_manager;
    RoutineTracer *m_rtn_tracer;
    MemoryTracker *m_memory_tracker;
+
+   DramTraceAnalyzer *m_dram_trace_analyzer;
 
    bool m_running;
    bool m_inst_mode_output;
