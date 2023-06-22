@@ -65,7 +65,7 @@ DramTraceAnalyzer::DramTraceAnalyzer()
     registerStatsMetric("dram", 0, "page-one-step", &m_page_one_step);
     registerStatsMetric("dram", 0, "page-multi-write", &m_page_multi_write);
 
-    f_log = fopen("dram_trace_analysis.txt", "w");
+    f_log = fopen("dram_trace_analysis.out", "w");
 }
 
 void DramTraceAnalyzer::RecordDramAccess(core_id_t core_id, IntPtr address, DramCntlrInterface::access_t access_type){
@@ -92,6 +92,7 @@ void DramTraceAnalyzer::RecordDramAccess(core_id_t core_id, IntPtr address, Dram
 }
 
 void DramTraceAnalyzer::AnalyzeDramAccess(){
+    fprintf(stderr, "[SNIPER] Analyzing Dram Traces\n");
     for (auto it = m_vault_vn.begin(); it != m_vault_vn.end(); it++){
         Vault_Page::vn_comp_t type = it->second.type();
         switch(type){
@@ -129,6 +130,7 @@ void DramTraceAnalyzer::AnalyzeDramAccess(){
     fprintf(f_log, "Total Page Uniform Write: %lu\n", m_page_uniform_write);
     fprintf(f_log, "Total Page One Step: %lu\n", m_page_one_step);
     fprintf(f_log, "Total Page Multi Write: %lu\n", m_page_multi_write);
+    InitDramAccess();
 }
 
 void DramTraceAnalyzer::InitDramAccess(){
@@ -142,4 +144,5 @@ void DramTraceAnalyzer::InitDramAccess(){
     m_page_one_step = 0;
     m_page_multi_write = 0;
     m_vault_vn.clear();
+    fprintf(stderr, "[SNIPER] Dram Trace Analyzer Initialized\n");
 }
