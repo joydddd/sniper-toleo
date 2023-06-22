@@ -295,6 +295,6 @@ SubsecondTime DramCache::handleVNUpdateFromCXL(IntPtr address, core_id_t request
 
 SubsecondTime DramCache::handleVNverifyFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
    SubsecondTime verify_latency = m_dram_cntlr->handleVNverifyFromCXL(address, requester, data_buf, now, perf);
-   handleDataFromCXL(address, requester, data_buf, now + verify_latency, perf);
+   insertLine(Cache::LOAD, address, requester, data_buf, now);
    return verify_latency;
 }

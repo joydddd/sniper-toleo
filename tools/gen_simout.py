@@ -195,8 +195,14 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     if 'mee-queue.total-time-used' in results:
       results['mee.bandwidth'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['mee-queue.total-time-used'])
       template.append(('  average mee bandwidth utilization', 'mee.bandwidth', lambda v: '%.2f%%' % v))
-
     
+    if 'mee.mac_accesses' in results:
+      results['mee.mac_accesses'] = map(sum, results['mee.mac_accesses'])
+      results['mee.mac_misses'] = map(sum, results['mee.mac_misses'])
+      results['mee.mac_missrate'] = map(lambda (a,b): 100*a/float(b) if b else float('inf'), zip(results['mee.mac_misses'], results['mee.mac_accesses']))
+      template.append(('  num mac cache accesses', 'mee.mac_accesses', str))
+      template.append(('  num mac cache misses', 'mee.mac_misses', str))
+      template.append(('  mac cache miss rate', 'mee.mac_missrate', lambda v: '%.2f%%' % v))
   
   if 'L1-D.loads-where-dram-local' in results:
     results['L1-D.loads-where-dram'] = map(sum, zip(results['L1-D.loads-where-dram-local'], results['L1-D.loads-where-dram-remote']))

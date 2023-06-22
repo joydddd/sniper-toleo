@@ -31,6 +31,8 @@ const char* shmem_reason_names[] = {
    "vn",
    "vn-device",
    "mme",
+   "mee-mac-cache-tags",
+   "mee-mac-cache-data",
    "unknown",
 };
 

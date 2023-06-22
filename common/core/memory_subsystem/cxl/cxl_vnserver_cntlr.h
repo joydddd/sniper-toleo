@@ -6,6 +6,7 @@
 #include "cxl_cntlr_interface.h"
 #include "shmem_msg.h"
 #include "shmem_perf.h"
+#include "cache.h"
 #include "fixed_types.h"
 #include "cxl_address_translator.h"
 #include "cxl_perf_model.h"
@@ -32,6 +33,7 @@ class CXLVNServerCntlr : public CXLCntlrInterface
      
      SubsecondTime getVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
      SubsecondTime updateVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
+     void insertMAC(IntPtr address, Cache::access_t access, core_id_t requester, Byte* data_buf, SubsecondTime now);
 
     public:
      CXLVNServerCntlr(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, UInt32 cache_block_size, CXLAddressTranslator* cxl_address_tranlator, CXLCntlr* cxl_cntlr, core_id_t core_id);

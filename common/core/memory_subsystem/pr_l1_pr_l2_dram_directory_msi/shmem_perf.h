@@ -39,6 +39,8 @@ class ShmemPerf
          VN,
          VN_DEVICE,
          MEE,
+         MEE_MAC_CACHE_TAGS,
+         MEE_MAC_CACHE_DATA,
          UNKNOWN,
          NUM_SHMEM_TIMES
       } shmem_times_type_t;
