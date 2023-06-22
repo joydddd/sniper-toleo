@@ -36,6 +36,9 @@ class ShmemPerf
          CXL_QUEUE,
          CXL_BUS,
          CXL_DEVICE,
+         VN,
+         VN_DEVICE,
+         MEE,
          UNKNOWN,
          NUM_SHMEM_TIMES
       } shmem_times_type_t;

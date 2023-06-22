@@ -25,6 +25,8 @@ class CXLAddressTranslator
       // Within cxl node, return unique, incrementing address to be used in cache set selection
       IntPtr getLinearAddress(IntPtr address);
 
+      UInt32 getnumCXLDevices() { return m_num_cxl_devs; }
+
       void printPageUsage();
       void printPageTable();
 

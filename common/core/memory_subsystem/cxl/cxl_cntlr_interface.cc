@@ -36,19 +36,17 @@ void CXLCntlrInterface::handleMsgFromDram(core_id_t sender, PrL1PrL2DramDirector
          SubsecondTime cxl_latency;
          HitWhere::where_t hit_where;
 
-         IntPtr linear_address = m_address_translator->getLinearAddress(address);
-         cxl_id_t cxl_id = m_address_translator->getHome(address);
          
-         MYLOG("[cxl %d] handle R @%016lx, ##local addr## %016lx\n", cxl_id, address, linear_address);
+         MYLOG("[cxl] handle R @%016lx\n",address);
 
-         boost::tie(cxl_latency, hit_where) = getDataFromCXL(linear_address, cxl_id, shmem_msg->getRequester(), data_buf, msg_time, shmem_msg->getPerf());
+         boost::tie(cxl_latency, hit_where) = getDataFromCXL(address, shmem_msg->getRequester(), data_buf, msg_time, shmem_msg->getPerf());
 
          getShmemPerfModel()->incrElapsedTime(cxl_latency, ShmemPerfModel::_SIM_THREAD);
 
          shmem_msg->getPerf()->updateTime(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD),
             ShmemPerf::CXL);
 
-         MYLOG("[cxl %d] send R REP to [dram cntlr %d] @%016lx\n", cxl_id, sender, address);
+         MYLOG("[cxl] send R REP to [dram cntlr %d] @%016lx\n", sender, address);
          getMemoryManager()->sendMsg(PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_READ_REP,
                MemComponent::CXL, MemComponent::DRAM,
                shmem_msg->getRequester() /* requester */,
@@ -62,13 +60,52 @@ void CXLCntlrInterface::handleMsgFromDram(core_id_t sender, PrL1PrL2DramDirector
       case PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_WRITE_REQ:
       {
          IntPtr address = shmem_msg->getAddress();
-         cxl_id_t cxl_id = m_address_translator->getHome(address);
-         IntPtr linear_address = m_address_translator->getLinearAddress(address);
-         MYLOG("[cxl %d] handle W @%016lx, ##local addr## %016lx\n", cxl_id, address, linear_address);
-         putDataToCXL(linear_address, cxl_id, shmem_msg->getRequester(), shmem_msg->getDataBuf(), msg_time);
+         MYLOG("[cxl] handle W @%016lx\n", address);
+         putDataToCXL(address, shmem_msg->getRequester(), shmem_msg->getDataBuf(), msg_time);
 
          // DRAM latency is ignored on write
 
+         break;
+      }
+
+      case PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_REQ:
+      {
+         LOG_ASSERT_ERROR(m_vn_server_enabled, "CXL VN Server is not enabled, cannot handle CXL_VN_REQ");
+         IntPtr address = shmem_msg->getAddress();
+         Byte data_buf[getVNBlockSize()];
+         MYLOG("[cxl] handle VN REQ @%016lx\n", address);
+         SubsecondTime vn_access_latency = getVNFromCXL(address, shmem_msg->getRequester(), data_buf, msg_time, shmem_msg->getPerf());
+         getShmemPerfModel()->incrElapsedTime(vn_access_latency, ShmemPerfModel::_SIM_THREAD);
+         shmem_msg->getPerf()->updateTime(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD), ShmemPerf::VN);
+
+         MYLOG("[cxl] send VN REP to [dram cntlr %d] @%016lx\n", sender, address);
+         getMemoryManager()->sendMsg(PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_REP,
+               MemComponent::CXL, MemComponent::DRAM,
+               shmem_msg->getRequester() /* requester */,
+               sender                     /* receiver */,
+               address,
+               data_buf, getVNBlockSize(),
+               shmem_msg->getWhere(), shmem_msg->getPerf(), ShmemPerfModel::_SIM_THREAD);
+         break;
+      }
+
+      case PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_UPDATE:
+      {
+         LOG_ASSERT_ERROR(m_vn_server_enabled, "CXL VN Server is not enabled, cannot handle CXL_VN_UPDATE");
+         IntPtr address = shmem_msg->getAddress();
+         Byte data_buf[getVNBlockSize()];
+         MYLOG("[cxl] handle VN UPDATE @%016lx\n", address);
+         SubsecondTime vn_access_latency = updateVNToCXL(address, shmem_msg->getRequester(), data_buf, msg_time);
+         getShmemPerfModel()->incrElapsedTime(vn_access_latency, ShmemPerfModel::_SIM_THREAD);
+
+         MYLOG("[cxl] send VN REP to [dram cntlr %d] @%016lx\n", sender, address);
+         getMemoryManager()->sendMsg(PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_UPDATE_REP,
+               MemComponent::CXL, MemComponent::DRAM,
+               shmem_msg->getRequester() /* requester */,
+               sender                     /* receiver */,
+               address,
+               data_buf, getVNBlockSize(),
+               shmem_msg->getWhere(), &m_dummy_shmem_perf, ShmemPerfModel::_SIM_THREAD);
          break;
       }
 

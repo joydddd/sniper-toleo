@@ -22,12 +22,20 @@ class CXLCntlr : public CXLCntlrInterface
      CXLPerfModel** m_cxl_perf_models;
 
      FILE* f_trace;
+     bool enable_trace;
 
     public:
      CXLCntlr(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, UInt32 cache_block_size, CXLAddressTranslator* cxl_address_tranlator, std::vector<bool>& cxl_connected);
      ~CXLCntlr();
-     boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromCXL(IntPtr address, cxl_id_t cxl_id, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
-     boost::tuple<SubsecondTime, HitWhere::where_t> putDataToCXL(IntPtr address, cxl_id_t cxl_id, core_id_t requester, Byte* data_buf, SubsecondTime now);
+     boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
+     boost::tuple<SubsecondTime, HitWhere::where_t> putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
+
+     SubsecondTime getVNFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf) {
+         LOG_ASSERT_ERROR(false, "getVNFromCXL not implemented");
+     }
+     SubsecondTime updateVNToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now) {
+        LOG_ASSERT_ERROR(false, "getVNFromCXL not implemented");
+     }
 
      void enablePerfModel();
      void disablePerfModel();
