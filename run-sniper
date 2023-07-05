@@ -103,6 +103,7 @@ frontend = None
 use_pid = None
 tracegen = None
 trace_extra_args = []
+trace_dir = None
 verbose = False
 use_pa = True
 use_pinplay = False
@@ -222,6 +223,7 @@ try:
       "pid=",
       "frontend=",
       "record-trace-option=",
+      "trace-dir="
     ] + record_trace_passthrough
   )
 except getopt.GetoptError, e:
@@ -336,6 +338,8 @@ for o, a in opts:
     trace_extra_args.extend(['-x', a])
   if o == '--record-trace-option':
     trace_extra_args.extend([a])
+  if o == '--trace-dir':
+    trace_dir = a
   if o == '--mpi':
     use_mpi = True
   if o == '--mpi-ranks':
@@ -612,7 +616,10 @@ if tracegen:
   sniperoptions.append('-g --traceinput/num_apps=%d' % tracegen['num_apps'])
   tracegen['tracefiles_created'] = [] # FIFOs to be cleaned up
   basefname = 'run_benchmarks'
-  tracegen['tracetempdir'] = tempfile.mkdtemp()
+  if trace_dir:
+    tracegen['tracetempdir'] = trace_dir
+  else:
+    tracegen['tracetempdir'] = tempfile.mkdtemp()
   traceprefix = os.path.join(tracegen['tracetempdir'], basefname)
   sniperoptions.append('-g --traceinput/trace_prefix=%s' % traceprefix)
   # Create FIFOs for first thread of each application
@@ -891,7 +898,7 @@ if tracegen:
   try:
     for f in tracegen['tracefiles_created']:
       os.unlink(f)
-    os.rmdir(tracegen['tracetempdir'])
+    # os.rmdir(tracegen['tracetempdir'])
   except OSError:
     pass
 

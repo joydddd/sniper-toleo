@@ -9,8 +9,11 @@
 
 class Vault_Page {
     public:
+    typedef enum { READ_ONLY = 0, UNIFORM_WRITE, ONE_STEP, VAULT, OVERFLOW } vn_comp_t;
 
     bool written = false;
+    bool sparse = false; // if VN is more than 1 apart during ROI. 
+    vn_comp_t type = READ_ONLY;
     UInt32 shared_vn;
     UInt8 private_vn[64];
     UInt8 max_private, min_private;
@@ -20,8 +23,7 @@ class Vault_Page {
     ~Vault_Page(){}
 
     void write(UInt8 cl_num);
-    typedef enum { READ_ONLY = 0, UNIFORM_WRITE, ONE_STEP, VAULT, OVERFLOW } vn_comp_t;
-    vn_comp_t type();
+    vn_comp_t gen_type();
 };
 
 class DramTraceAnalyzer {

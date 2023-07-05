@@ -25,9 +25,12 @@ void Vault_Page::write(UInt8 cl_num){
         ++shared_vn;
         for (int i = 0; i < 64; i++) private_vn[i] = 0; 
     }
+
+    type = gen_type();
+    if (type == VAULT || type == OVERFLOW) sparse = true;
 }
 
-Vault_Page::vn_comp_t Vault_Page::type(){
+Vault_Page::vn_comp_t Vault_Page::gen_type(){
     if (!written) return READ_ONLY;
     if (shared_vn != 0) return OVERFLOW;
     max_private = 0, min_private = UINT8_MAX;
@@ -93,9 +96,9 @@ void DramTraceAnalyzer::RecordDramAccess(core_id_t core_id, IntPtr address, Dram
 
 void DramTraceAnalyzer::AnalyzeDramAccess(){
     fprintf(stderr, "[SNIPER] Analyzing Dram Traces\n");
-    for (auto it = m_vault_vn.begin(); it != m_vault_vn.end(); it++){
-        Vault_Page::vn_comp_t type = it->second.type();
-        switch(type){
+    UInt64 total_page_sparse = 0;
+    for (auto it = m_vault_vn.begin(); it != m_vault_vn.end(); it++) {
+        switch(it->second.type){
             case Vault_Page::READ_ONLY:
                 m_page_readonly++;
                 break;
@@ -120,12 +123,14 @@ void DramTraceAnalyzer::AnalyzeDramAccess(){
                 m_page_dirty++;
                
         }
+        if (it->second.sparse) total_page_sparse++;
     }
     fprintf(f_log, "========================================================\n");
     fprintf(f_log, "Total Reads: %lu\n", m_reads);
     fprintf(f_log, "Total Writes: %lu\n", m_writes);
     fprintf(f_log, "Total Page Touched: %lu\n", m_page_touched);
     fprintf(f_log, "Total Page Dirty: %lu\n", m_page_dirty);
+    fprintf(f_log, "Total Page Sparse: %lu\n", total_page_sparse);
     fprintf(f_log, "Total Page Read Only: %lu\n", m_page_readonly);
     fprintf(f_log, "Total Page Uniform Write: %lu\n", m_page_uniform_write);
     fprintf(f_log, "Total Page One Step: %lu\n", m_page_one_step);
