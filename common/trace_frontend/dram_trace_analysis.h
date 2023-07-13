@@ -28,6 +28,7 @@ class Vault_Page {
 
 class DramTraceAnalyzer {
    private:
+    bool enable = false;
     UInt64 m_reads, m_writes;
     UInt64 m_page_touched, m_page_dirty;
     UInt64 m_page_readonly, m_page_uniform_write, m_page_one_step,
@@ -46,10 +47,14 @@ class DramTraceAnalyzer {
     void AnalyzeDramAccess();
     void InitDramAccess();
     static SInt64 ROIstartHOOK(UInt64 object, UInt64 argument){
-        ((DramTraceAnalyzer*)object)->InitDramAccess(); return 0;
+        ((DramTraceAnalyzer*)object)->enable = true;
+        ((DramTraceAnalyzer*)object)->InitDramAccess();
+        return 0;
     }
     static SInt64 ROIendHOOK(UInt64 object, UInt64 argument){
-        ((DramTraceAnalyzer*)object)->AnalyzeDramAccess(); return 0;
+        ((DramTraceAnalyzer*)object)->enable = false;
+        ((DramTraceAnalyzer*)object)->AnalyzeDramAccess();
+        return 0;
     }
 };
 

@@ -45,7 +45,8 @@ Vault_Page::vn_comp_t Vault_Page::gen_type(){
 }
 
 DramTraceAnalyzer::DramTraceAnalyzer()
-    : m_reads(0)
+    : enable(false)
+    , m_reads(0)
     , m_writes(0)
     , m_page_touched(0)
     , m_page_dirty(0)
@@ -54,10 +55,8 @@ DramTraceAnalyzer::DramTraceAnalyzer()
     , m_page_one_step(0)
     , m_page_multi_write(0)
 {
-    Sim()->getHooksManager()->registerHook(HookType::HOOK_APPLICATION_START, DramTraceAnalyzer::ROIstartHOOK, (UInt64)this);
-    Sim()->getHooksManager()->registerHook(HookType::HOOK_APPLICATION_ROI_BEGIN, DramTraceAnalyzer::ROIstartHOOK, (UInt64)this);
-    Sim()->getHooksManager()->registerHook(HookType::HOOK_APPLICATION_ROI_END, DramTraceAnalyzer::ROIendHOOK, (UInt64)this);
-    Sim()->getHooksManager()->registerHook(HookType::HOOK_APPLICATION_EXIT, DramTraceAnalyzer::ROIendHOOK, (UInt64)this);
+    Sim()->getHooksManager()->registerHook(HookType::HOOK_ROI_BEGIN, DramTraceAnalyzer::ROIstartHOOK, (UInt64)this);
+    Sim()->getHooksManager()->registerHook(HookType::HOOK_ROI_END, DramTraceAnalyzer::ROIendHOOK, (UInt64)this);
     
     registerStatsMetric("dram", 0, "total-reads", &m_reads);
     registerStatsMetric("dram", 0, "total-writes", &m_writes);
@@ -72,6 +71,7 @@ DramTraceAnalyzer::DramTraceAnalyzer()
 }
 
 void DramTraceAnalyzer::RecordDramAccess(core_id_t core_id, IntPtr address, DramCntlrInterface::access_t access_type){
+    if (!enable) return;
     IntPtr page_num = address >> PAGE_BITS;
     UInt8 cl_num = (address & (PAGE_SIZE - 1)) >> CACHE_LINE_BITS;
 

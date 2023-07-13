@@ -9,7 +9,7 @@ import sim
 
 SIM_USER_ROI = 0x0be0000f
 
-class SimUserROI:
+class SimUserWarmupROI:
   def setup(self, args):
     roiscript = sim.config.get_bool('general/roi_script')
     if not roiscript:
@@ -20,14 +20,14 @@ class SimUserROI:
 
   # Out-of-bound set-roi
   def set_roi(self, cmd, arg):
-    if (arg == 2): # start
+    if (arg == 0): # start
       print ('[SCRIPT] Start of ROI: beginning ROI')
       sim.control.set_roi(True)
     elif (arg == 1): # stop
       print ('[SCRIPT] End of ROI: beginning ROI')
       sim.control.set_roi(False)
-    elif (arg == 0): # warmup start
+    elif (arg == 2): # warmup start
       print ('[SCRIPT] Start of WARMUP: beginning WARMUP')
       sim.control.set_instrumentation_mode(sim.control.WARMUP)
 
-sim.util.register(SimUserROI())
+sim.util.register(SimUserWarmupROI())
