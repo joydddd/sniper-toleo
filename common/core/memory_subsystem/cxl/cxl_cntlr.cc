@@ -86,7 +86,7 @@ boost::tuple<SubsecondTime, HitWhere::where_t> CXLCntlr::getDataFromCXL(IntPtr a
    SubsecondTime cxl_latency = m_cxl_perf_models[cxl_id]->getAccessLatency(now, pkt_size, requester, local_address, READ, perf);
 
    ++m_reads[cxl_id];
-   MYLOG("[%d]R @ %08lx latency %s", requester, address, itostr(cxl_latency.getNS()).c_str());
+   MYLOG("[%d]R @ %016lx latency %s", cxl_id, address, itostr(cxl_latency.getNS()).c_str());
 
    return boost::tuple<SubsecondTime, HitWhere::where_t>(cxl_latency, HitWhere::CXL);
 }
@@ -102,7 +102,7 @@ CXLCntlr::putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, Subs
    SubsecondTime cxl_latency = m_cxl_perf_models[cxl_id]->getAccessLatency(now, pkt_size, requester, local_address, WRITE, &m_dummy_shmem_perf);
 
    ++m_writes[cxl_id];
-   MYLOG("[%d]W @ %08lx latency %s", requester, address, itostr(cxl_latency.getNS()).c_str());
+   MYLOG("[%d]W @ %016lx latency %s", cxl_id, address, itostr(cxl_latency.getNS()).c_str());
 
    return boost::tuple<SubsecondTime, HitWhere::where_t>(cxl_latency, HitWhere::CXL);
 }

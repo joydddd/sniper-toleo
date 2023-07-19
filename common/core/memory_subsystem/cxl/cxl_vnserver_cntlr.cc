@@ -33,7 +33,7 @@ CXLVNServerCntlr::CXLVNServerCntlr(
     m_enable_trace(false)
 {
    m_cxl_pkt_size = Sim()->getCfg()->getInt("perf_model/cxl/vnserver/pkt_size");
-   m_mee = new MEENaive(core_id + 1);
+   m_mee = new MEENaive(memory_manager, shmem_perf_model, core_id + 1, cache_block_size, cxl_cntlr);
    m_vn_length = m_mee->getVNLength(); // vn_length in bits
 
    SubsecondTime vnserver_access_cost =
@@ -69,7 +69,7 @@ SubsecondTime CXLVNServerCntlr::getVN(IntPtr address, core_id_t requester, Byte*
    SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, m_vn_length, requester, address, CXLCntlrInterface::VN_READ, perf);
 
    ++m_vn_reads;
-   MYLOG("[%d]R @ %08lx latency %s", requester, address, itostr(cxl_latency.getNS()).c_str());
+   MYLOG("[%d]getVN @ %016lx latency %s", requester, address, itostr(cxl_latency.getNS()).c_str());
 
    return cxl_latency;
 }
@@ -79,58 +79,44 @@ SubsecondTime CXLVNServerCntlr::updateVN(IntPtr address, core_id_t requester, By
     SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, m_vn_length, requester, address, CXLCntlrInterface::VN_UPDATE, perf);
 
    ++m_vn_updates;
-   MYLOG("[%d]U @ %08lx latency %s", requester, address, itostr(cxl_latency.getNS()).c_str());
+   MYLOG("[%d]UpdateVN @ %016lx latency %s", requester, address, itostr(cxl_latency.getNS()).c_str());
 
    return cxl_latency;
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t> 
 CXLVNServerCntlr::getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
-   SubsecondTime vn_latency, mee_decrypt_latency, mac_latency;
-   SubsecondTime total_latency;
+   SubsecondTime vn_latency, mac_latency;
+   SubsecondTime latency;
    HitWhere::where_t hit_where, hit_where_mac;
+   MYLOG("[%d]R @ %016lx ", requester, address);
 
-   boost::tie(mac_latency, hit_where) = m_cxl_cntlr->getDataFromCXL(address, requester, data_buf, now, perf);
-   vn_latency = getVN(address, requester, data_buf, now, perf);
-   boost::tie(mac_latency, hit_where_mac) = m_mee->verifyMAC(address, requester, now, perf);
-   if (hit_where_mac == HitWhere::UNKNOWN){
-      boost::tie(mac_latency, hit_where_mac) = m_cxl_cntlr->getDataFromCXL(address, requester, data_buf, now + mac_latency, perf);
-      IntPtr mac_evict_addr;
-      bool mac_writeback;
-      m_mee->insertMAC(address, mac_writeback, mac_evict_addr, Cache::LOAD, requester, now + mac_latency);
-      /* writeback evicted MAC cache to CXL */
-      if (mac_writeback) m_cxl_cntlr->putDataToCXL(mac_evict_addr, requester, data_buf, now + mac_latency);
+   boost::tie(latency, hit_where) = m_cxl_cntlr->getDataFromCXL(address, requester, data_buf, now, perf); // fetch data from CXL memory expander
+   latency += m_mee->decryptData(address, requester, now + latency, perf); // decrypt cipher text
+   boost::tie(mac_latency, hit_where_mac) = m_mee->verifyMAC(address, requester, now, perf); // verify MAC
+   if (hit_where_mac != HitWhere::MEE_CACHE) { // meta data is not cached.
+      vn_latency = getVN(address, requester, data_buf, now, perf); // fetch VN from VN Vault
+   }  else {
+      vn_latency = mac_latency;
    }
 
-   total_latency = vn_latency > total_latency ? vn_latency : total_latency;
-   total_latency += m_mee->decryptData(address, requester, now + total_latency, perf);
-   total_latency = total_latency > mac_latency  ? total_latency : mac_latency;
-   
-   return boost::make_tuple(total_latency, hit_where);
+   /* latency is max of vn_latency, data_latency & mac latency */
+   latency = mac_latency > latency ? mac_latency : latency;
+   latency = vn_latency > latency ? vn_latency : latency;
+   return boost::make_tuple(latency, hit_where);
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t> 
 CXLVNServerCntlr::putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
-   SubsecondTime data_access_latency, vn_latency, mee_encryption_latency, mac_latency;
-   SubsecondTime total_latency;
-   HitWhere::where_t hit_where;
-
-   vn_latency = updateVN(address, requester, data_buf, now, NULL);
-   mee_encryption_latency = m_mee->encryptData(address, requester, now + vn_latency);
-   mac_latency = m_mee->genMAC(address, requester, now + vn_latency + mee_encryption_latency, &m_dummy_shmem_perf);
-
-
-   boost::tie(data_access_latency, hit_where) = m_cxl_cntlr->putDataToCXL(address, requester, data_buf, now + mee_encryption_latency);
-   total_latency = vn_latency > mee_encryption_latency ? vn_latency : mee_encryption_latency;
-   mee_mac_latency = m_mee->genMAC(address, requester, now + total_latency, &m_dummy_shmem_perf);
-   accessMAC(address, Cache::STORE, requester, data_buf,  now + total_latency + mee_mac_latency, &m_dummy_shmem_perf);
-
-   total_latency =
-       data_access_latency + mee_mac_latency > total_latency + mee_mac_latency
-           ? data_access_latency + mee_mac_latency
-           : total_latency + mee_mac_latency;
-
-   return boost::make_tuple(total_latency, hit_where);
+   SubsecondTime encryption_latency, vn_latency, mac_latency, latency;
+   HitWhere::where_t hit_where, hit_where_mac;
+   MYLOG("[%d]W @ %016lx ", requester, address);
+   
+   boost::tie(mac_latency, hit_where_mac) = m_mee->genMAC(address, requester, now); // access MAC
+   vn_latency = updateVN(address, requester, data_buf, now, &m_dummy_shmem_perf); // always update VN in VN Vault, even when it is cached. 
+   encryption_latency = m_mee->encryptData(address, requester, now + vn_latency); // encrypt data
+   boost::tie(latency, hit_where) = m_cxl_cntlr->putDataToCXL(address, requester, data_buf, now + encryption_latency + vn_latency); // put cipher text data to CXL
+   return boost::make_tuple(SubsecondTime::Zero(), HitWhere::CXL);
 }
 
 SubsecondTime CXLVNServerCntlr::getVNFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
