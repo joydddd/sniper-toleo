@@ -1,6 +1,24 @@
 #include "dram_mee_cntlr.h"
 #include "memory_manager.h"
 #include "mee_naive.h"
+#include "stats.h"
+
+#if 1
+#  define MYLOG_ENABLED
+   extern Lock iolock;
+#  include "core_manager.h"
+#  include "simulator.h"
+#  define MYLOG(...) {                                                                    \
+   ScopedLock l(iolock);                                                                  \
+   fflush(f_trace);                                                                        \
+   fprintf(f_trace, "[%s] %d%cdr %-25s@%3u: ",                                                      \
+   itostr(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD)).c_str(),      \
+         getMemoryManager()->getCore()->getId(),                                          \
+         Sim()->getCoreManager()->amiUserThread() ? '^' : '_', __FUNCTION__, __LINE__);   \
+   fprintf(f_trace, __VA_ARGS__); fprintf(f_trace, "\n"); fflush(f_trace); }
+#else
+#  define MYLOG(...) {}
+#endif
 
 DramMEECntlr::DramMEECntlr(MemoryManagerBase* memory_manager,
                   ShmemPerfModel* shmem_perf_model, UInt32 cache_block_size,
@@ -10,6 +28,16 @@ DramMEECntlr::DramMEECntlr(MemoryManagerBase* memory_manager,
     , m_dram_cntlr(dram_cntlr)
 {
     m_mee = new MEENaive(memory_manager, shmem_perf_model, core_id, m_cache_block_size, NULL);
+    registerStatsMetric("dram-mee", memory_manager->getCore()->getId(), "reads", &m_reads);
+    registerStatsMetric("dram-mee", memory_manager->getCore()->getId(), "writes", &m_writes);
+
+#ifdef MYLOG_ENABLED
+   std::ostringstream trace_filename;
+   trace_filename << "dram_mee_cntlr_" << memory_manager->getCore()->getId()
+                  << ".trace";
+   f_trace = fopen(trace_filename.str().c_str(), "w+");
+   std::cerr << "Create Dram mee cntlr trace " << trace_filename.str().c_str() << std::endl;
+#endif // MYLOG_ENABLED
 }
 
 DramMEECntlr::~DramMEECntlr(){
@@ -19,93 +47,76 @@ DramMEECntlr::~DramMEECntlr(){
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
 DramMEECntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
-    SubsecondTime dram_latency, latency = SubsecondTime::Zero(); 
+    m_reads++;
+    MYLOG("[%d]R @ %016lx ", requester, address);
+    SubsecondTime dram_latency, decrypt_latency, latency = SubsecondTime::Zero(); 
     HitWhere::where_t hit_where;
     boost::tie(dram_latency, hit_where) = m_dram_cntlr->getDataFromDram(address, requester, data_buf, now, perf);
-    return  boost::tuple<SubsecondTime, HitWhere::where_t>(dram_latency, hit_where);
-    // TODO: 
-    // cxl_id_t cxl_id = m_address_translator->getHome(address);
-    // if (cxl_id == HOST_CXL_ID) { // data is locates in local dram
-    //     LOG_ASSERT_ERROR(hit_where == HitWhere::DRAM, "data is not in local dram");
-
-    //     /* verify MAC */
-    //     SubsecondTime mac_latency, a;
-    //     HitWhere::where_t mac_hit_where;
-    //     boost::tie(mac_latency, mac_hit_where) = m_mee->verifyMAC(address, requester, now, perf);
-    //     if (mac_hit_where != HitWhere::MEE_CACHE){ // mac read cache miss
-    //         boost::tie(mac_latency, mac_hit_where) = m_dram_cntlr->getDataFromDram(address, requester, data_buf, now + mac_latency, perf);
-    //         LOG_ASSERT_ERROR(mac_hit_where == HitWhere::DRAM, "mac is not in local dram");
-    //         IntPtr evict_addr;
-    //         bool mac_writeback;
-    //         m_mee->insertMAC(address, mac_writeback, evict_addr, Cache::LOAD, requester, now + mac_latency);
-    //         /* writeback evicted MAC cachline to DRAM */
-    //         if (mac_writeback)   boost::tie(a, mac_hit_where) = m_dram_cntlr->putDataToDram(evict_addr, requester, data_buf, now + mac_latency);
-    //         LOG_ASSERT_ERROR(mac_hit_where == HitWhere::DRAM, "mac is not in local dram");
-    //     }
-    //     latency = mac_latency > dram_latency ? mac_latency : dram_latency;
-
-    //     /* send msg to cxl vnserver cntlr*/
-    //     getShmemPerfModel()->updateElapsedTime(now, ShmemPerfModel::_SIM_THREAD);
-    //     getMemoryManager()->sendMsg(
-    //     PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_REQ, MemComponent::DRAM,
-    //     MemComponent::CXL, requester, /* requester */
-    //     0,                            /* receiver */
-    //     address, NULL, 0, HitWhere::where_t::DRAM, perf,
-    //     ShmemPerfModel::_SIM_THREAD);
-    //     hit_where == HitWhere::CXL_VN;
-
-    // }
-    // return boost::tuple<SubsecondTime, HitWhere::where_t>(latency, hit_where);
+    // if data is not in local dram. request to fetch data has already been sent
+    if (hit_where != HitWhere::DRAM){
+        return boost::tuple<SubsecondTime, HitWhere::where_t>(dram_latency, hit_where);
+    }
+    // Data is located on local dram. Our MEE will handle it
+    /* verify MAC */
+    SubsecondTime mac_latency;
+    HitWhere::where_t mac_hit_where;
+    boost::tie(mac_latency, mac_hit_where) = m_mee->verifyMAC(address, requester, now, perf);
+    if (mac_hit_where != HitWhere::MEE_CACHE){ // mac read cache miss, VN is not cached. 
+        /* send msg to cxl vnserver cntlr to fetch VN */
+        getShmemPerfModel()->updateElapsedTime(now, ShmemPerfModel::_SIM_THREAD);
+        getMemoryManager()->sendMsg(
+        PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_REQ, MemComponent::DRAM,
+        MemComponent::CXL, requester, /* requester */
+        0,                            /* receiver */
+        address, NULL, 0, HitWhere::where_t::DRAM, perf,
+        ShmemPerfModel::_SIM_THREAD);
+        hit_where = HitWhere::CXL_VN;
+    }
+    latency = mac_latency > dram_latency ? mac_latency : dram_latency;
+    // decrypt_latency = m_mee->decryptData(address, requester, now + latency, perf);
+    // latency += decrypt_latency;
+    return boost::tuple<SubsecondTime, HitWhere::where_t>(latency, hit_where);
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
 /* request updated VN, but not writing to dram yet */
 DramMEECntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
-    m_dram_cntlr->putDataToDram(address, requester, data_buf, now);
-    // TODO: 
-    // cxl_id_t cxl_id = m_address_translator->getHome(address);
-    // if (cxl_id == HOST_CXL_ID) { // data is written to local dram
-    //     /* send msg to get updated vn */
-    //     getShmemPerfModel()->updateElapsedTime(now, ShmemPerfModel::_SIM_THREAD);
-    //     getMemoryManager()->sendMsg(
-    //     PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_UPDATE, MemComponent::DRAM,
-    //     MemComponent::CXL, requester, /* requester */
-    //     0,                            /* receiver */
-    //     address, NULL, 0, HitWhere::UNKNOWN, &m_dummy_shmem_perf,
-    //     ShmemPerfModel::_SIM_THREAD);
-    //     return boost::tuple<SubsecondTime, HitWhere::where_t>(SubsecondTime::Zero(), HitWhere::CXL_VN);
-    // }
-
-    return boost::tuple<SubsecondTime, HitWhere::where_t>(SubsecondTime::Zero(), HitWhere::UNKNOWN);
+    m_writes++;
+    MYLOG("[%d]W @ %016lx ", requester, address);
+    SubsecondTime dram_latency;
+    HitWhere::where_t hit_where;
+    boost::tie(dram_latency, hit_where) = m_dram_cntlr->putDataToDram(address, requester, data_buf, now);
+    // if data is not in local dram. data has already been sent to CXL
+    if (hit_where != HitWhere::DRAM){
+        return boost::tuple<SubsecondTime, HitWhere::where_t>(dram_latency, hit_where);
+    }
+    // data is located at local dram, our MEE will handle encryption & MAC
+    /* send msg to get updated vn */
+    getShmemPerfModel()->updateElapsedTime(now, ShmemPerfModel::_SIM_THREAD);
+    getMemoryManager()->sendMsg(
+    PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_UPDATE, MemComponent::DRAM,
+    MemComponent::CXL, requester, /* requester */
+    0,                            /* receiver */
+    address, NULL, 0, HitWhere::UNKNOWN, &m_dummy_shmem_perf,
+    ShmemPerfModel::_SIM_THREAD);
+    return boost::tuple<SubsecondTime, HitWhere::where_t>(SubsecondTime::Zero(), HitWhere::CXL_VN);
 }
 
 SubsecondTime DramMEECntlr::handleVNUpdateFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
-    // TODO: 
     /* write latency is off critical path */
     /* generate MAC */
-    // SubsecondTime mac_latency, dram_latency;
-    // HitWhere::where_t mac_hit_where;
-    // boost::tie(mac_latency, mac_hit_where) = m_mee->genMAC(address, requester, now);
-    // if (mac_hit_where != HitWhere::MEE_CACHE){ // mac write cache miss
-    //     boost::tie(mac_latency, mac_hit_where) = m_dram_cntlr->getDataFromDram(address, requester, data_buf, now + mac_latency, &m_dummy_shmem_perf);
-    //     LOG_ASSERT_ERROR(mac_hit_where == HitWhere::DRAM, "mac is not in local dram");
-    //     IntPtr evict_addr;
-    //     bool mac_writeback;
-    //     m_mee->insertMAC(address, mac_writeback, evict_addr, Cache::STORE, requester, now + mac_latency);
-    //     /* write evicted MAC cachline to DRAM */
-    //     if (mac_writeback)   boost::tie(dram_latency, mac_hit_where) = m_dram_cntlr->putDataToDram(evict_addr, requester, data_buf, now + mac_latency);
-    //     LOG_ASSERT_ERROR(mac_hit_where == HitWhere::DRAM, "mac is not in local dram");
-    // }
-
-    // SubsecondTime encrypt_latency;
-    // encrypt_latency = m_mee->encryptData(address, requester, now);
-    // /* write data to DRAM*/
-    // m_dram_cntlr->putDataToDram(address, requester, data_buf, now + encrypt_latency);
+    SubsecondTime mac_latency, dram_latency;
+    HitWhere::where_t mac_hit_where;
+    SubsecondTime encrypt_latency;
+    encrypt_latency = m_mee->encryptData(address, requester, now);
+    boost::tie(mac_latency, mac_hit_where) = m_mee->genMAC(address, requester, now + encrypt_latency);
+    MYLOG("[%d]W_FINISH @ %016lx ", requester, address);
     return SubsecondTime::Zero();
 }
 
 SubsecondTime DramMEECntlr::handleVNverifyFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
     SubsecondTime decryption_latency = m_mee->decryptData(address, requester, now, perf);
+    MYLOG("[%d]R_FINISH @ %016lx ", requester, address);
     return decryption_latency;
 }
 

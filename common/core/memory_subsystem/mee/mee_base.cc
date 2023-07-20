@@ -26,7 +26,7 @@ IntPtr MEEBase::getMACaddr(IntPtr addr)
 {
     UInt32 m_mac_per_cacheline = getCacheBlockSize() * 8 / getMACLength();
     IntPtr page_num = addr >> PAGE_OFFSET;
-    IntPtr MACaddr = (addr & ((IntPtr)1 << PAGE_OFFSET - 1) / getCacheBlockSize()) / m_mac_per_cacheline;
-    MACaddr = MACaddr * getCacheBlockSize() + page_num << PAGE_OFFSET;// round down to CacheBlock boundary
+    IntPtr MACaddr = (addr & (((IntPtr)1 << PAGE_OFFSET) - 1) / getCacheBlockSize()) / m_mac_per_cacheline;
+    MACaddr = MACaddr * getCacheBlockSize() + (page_num << PAGE_OFFSET);// round down to CacheBlock boundary
     return MACaddr;
 }

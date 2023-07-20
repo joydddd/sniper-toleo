@@ -23,9 +23,10 @@
 #endif
 
 
-MEENaive::MEENaive(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, core_id_t core_id, UInt32 cache_block_size, CXLCntlrInterface* cxl_cntlr):
+MEENaive::MEENaive(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, core_id_t core_id, UInt32 cache_block_size, CXLCntlrInterface* cxl_cntlr, DramCntlrInterface *dram_cntlr):
     MEEBase(memory_manager, shmem_perf_model, core_id, cache_block_size)
     , m_cxl_cntlr(cxl_cntlr)
+    , m_dram_cntlr(dram_cntlr)
     , f_trace(NULL)
     , m_enable_trace(false)
 {
@@ -86,8 +87,12 @@ MEENaive::accessMAC(IntPtr mac_addr, Cache::access_t access, core_id_t requester
             if (m_cxl_cntlr) {
                 hit_where = HitWhere::CXL;
                 boost::tie(mem_latency, hit_where) = m_cxl_cntlr->getDataFromCXL(mac_addr, requester, data_buf, now + latency, perf);
+            } else if (m_dram_cntlr) {
+                hit_where = HitWhere::DRAM;
+                boost::tie(mem_latency, hit_where) = m_dram_cntlr->getDataFromDram(mac_addr, requester, data_buf, now + latency, perf);
+            } else {
+                LOG_ASSERT_ERROR(true, "No DRAM/CXL cntlr presents on MEE cntlr %d", m_core_id);
             }
-            // TODO: add support for dram cntlr. 
             latency += mem_latency;
         }
         insertMAC(access, mac_addr, requester, now + latency);
@@ -110,7 +115,8 @@ void MEENaive::insertMAC(Cache::access_t access, IntPtr mac_addr, core_id_t requ
     if (eviction && evict_block_info.getCState() == CacheState::MODIFIED){
         MYLOG("[%d]evict MAC @ %016lx", requester, evict_address);
         if (m_cxl_cntlr) m_cxl_cntlr->putDataToCXL(evict_address, requester, data_buf, now);
-        //TODO: write evict mac to dram cntlr if dram cntlr presents
+        else if (m_dram_cntlr) m_dram_cntlr->putDataToDram(evict_address, requester, data_buf, now);
+        else LOG_ASSERT_ERROR(true, "No DRAM/CXL cntlr presents on MEE cntlr %d", m_core_id);
     }
 }
 

@@ -4,6 +4,7 @@
 #include "mee_perf_model.h"
 #include "cache.h"
 #include "cxl/cxl_cntlr_interface.h"
+#include "dram_cntlr_interface.h"
 
 class MEENaive : public MEEBase {
     private:
@@ -15,7 +16,8 @@ class MEENaive : public MEEBase {
      Cache* m_mac_cache;
      MEEPerfModel *m_mme_perf_model;
      
-     CXLCntlrInterface* m_cxl_cntlr = NULL;
+     CXLCntlrInterface* m_cxl_cntlr;
+     DramCntlrInterface* m_dram_cntlr;
 
      ShmemPerf m_dummy_shmem_perf;
      FILE* f_trace;
@@ -29,7 +31,7 @@ class MEENaive : public MEEBase {
 
 
     public:
-     MEENaive(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, core_id_t core_id, UInt32 cache_block_size, CXLCntlrInterface* m_cxl_cntlr);
+     MEENaive(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, core_id_t core_id, UInt32 cache_block_size, CXLCntlrInterface* m_cxl_cntlr, DramCntlrInterface *m_dram_cntlr = NULL);
      ~MEENaive();
 
      boost::tuple<SubsecondTime, HitWhere::where_t> genMAC(

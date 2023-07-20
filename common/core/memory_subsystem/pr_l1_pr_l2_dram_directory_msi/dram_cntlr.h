@@ -51,6 +51,7 @@ namespace PrL1PrL2DramDirectoryMSI
          DramPerfModel* getDramPerfModel() { return m_dram_perf_model; }
 
          // Run DRAM performance model. Pass in begin time, returns latency
+         // If Data is located on DRAM, handle data request. else send request to CXL
          boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
          boost::tuple<SubsecondTime, HitWhere::where_t> putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
          SubsecondTime handleDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf) { return SubsecondTime::Zero();}

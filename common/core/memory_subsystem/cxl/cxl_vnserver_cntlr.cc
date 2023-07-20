@@ -114,7 +114,7 @@ CXLVNServerCntlr::putDataToCXL(IntPtr address, core_id_t requester, Byte* data_b
    
    boost::tie(mac_latency, hit_where_mac) = m_mee->genMAC(address, requester, now); // access MAC
    vn_latency = updateVN(address, requester, data_buf, now, &m_dummy_shmem_perf); // always update VN in VN Vault, even when it is cached. 
-   encryption_latency = m_mee->encryptData(address, requester, now + vn_latency); // encrypt data
+   encryption_latency = m_mee->encryptData(address, requester, now + vn_latency); // encrypt data (is dependent on VN)
    boost::tie(latency, hit_where) = m_cxl_cntlr->putDataToCXL(address, requester, data_buf, now + encryption_latency + vn_latency); // put cipher text data to CXL
    return boost::make_tuple(SubsecondTime::Zero(), HitWhere::CXL);
 }

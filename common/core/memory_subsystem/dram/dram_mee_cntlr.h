@@ -10,6 +10,8 @@ class DramMEECntlr : public DramCntlrInterface
     private: 
      DramCntlrInterface* m_dram_cntlr;
      MEEBase* m_mee;
+     FILE* f_trace;
+     UInt64 m_reads, m_writes;
 
     public:
      DramMEECntlr(MemoryManagerBase* memory_manager,
