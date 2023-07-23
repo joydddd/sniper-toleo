@@ -240,7 +240,7 @@ MemoryManager::MemoryManager(Core* core,
          dram_total_size += Sim()->getCfg()->getIntArray("perf_model/dram/per_controller_size", *it) * 1000 * 1000 * 1000;
       }
 
-      m_address_translator = new CXLAddressTranslator(cxl_memory_expander_size_list, cxl_dev_cntlr_id_mapping, system_page_size, dram_total_size);
+      m_address_translator = new CXLAddressTranslator(cxl_memory_expander_size_list, cxl_dev_cntlr_id_mapping, system_page_size, getCacheBlockSize(), dram_total_size);
    }
 
    if (find(cxl_dev_cntlr_id_mapping.begin(), cxl_dev_cntlr_id_mapping.end(), getCore()->getId()) != cxl_dev_cntlr_id_mapping.end())

@@ -20,7 +20,7 @@ class MEEBase {
      ShmemPerfModel* m_shmem_perf_model;
      
      UInt64 m_num_encry, m_num_decry;
-     UInt64 m_mac_gen, m_mac_verify;
+     UInt64 m_mac_gen, m_mac_verify, m_mac_fetch;
      UInt32 m_vn_length, m_mac_length; // in bits
      UInt32 m_cache_block_size; // in bytes
      core_id_t m_core_id;
@@ -39,24 +39,30 @@ class MEEBase {
     MemoryManagerBase* getMemoryManager() { return m_memory_manager; }
     ShmemPerfModel* getShmemPerfModel() { return m_shmem_perf_model; }
 
-    /* during WRITE: generate MAC from cipher. Write MAC to mee cache. */
+    /* during WRITE: generate MAC from cipher(critical) + VN(critical). write MAC & VN to mee cache. */
     virtual boost::tuple<SubsecondTime, HitWhere::where_t> genMAC(
 IntPtr address, core_id_t requester, SubsecondTime now) = 0;
 
-    /* during READ: generate MAC from cipher. verify against MAC in cache or on DRAM/CXL expander */
-    virtual boost::tuple<SubsecondTime, HitWhere::where_t> verifyMAC(
+    /* during READ: generate MAC from cipher(critical) + VN(critical). and compare against MAC that has already been fetched */
+    virtual SubsecondTime verifyMAC(IntPtr address, core_id_t requester,
+                            SubsecondTime now, ShmemPerf* perf) = 0;
+    /* during READ: fetch MAC and corresponding VN from corresponding mem ctnlr/mee cache 
+    *  return: MAC latency, VN latency, hitwhere */
+    virtual boost::tuple<SubsecondTime, SubsecondTime, HitWhere::where_t> fetchMACVN(
         IntPtr address, core_id_t requester, SubsecondTime now,
         ShmemPerf *perf) = 0;
 
+    /* druing WRITE: generate cipher text from plaintext + VN(critical). */
     virtual SubsecondTime encryptData(IntPtr address, core_id_t requester,
                                       SubsecondTime now) = 0;
+    
+    /* during READ: genreate plaintext from cipher + VN(critical) */
     virtual SubsecondTime decryptData(IntPtr address, core_id_t requester,
                                       SubsecondTime now, ShmemPerf *perf) = 0;
 
     UInt32 getVNLength() { return m_vn_length; } // in bits
     UInt32 getCacheBlockSize() { return m_cache_block_size; }
     UInt32 getMACLength() { return m_mac_length; } // in bits
-    IntPtr getMACaddr(IntPtr addr);
     virtual void enablePerfModel() = 0;
     virtual void disablePerfModel() = 0;
 };

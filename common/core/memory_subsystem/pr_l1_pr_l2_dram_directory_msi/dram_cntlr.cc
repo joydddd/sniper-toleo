@@ -9,7 +9,7 @@
 #include "config.h"
 #include "config.hpp"
 
-#if 0
+#if 1
 #  define MYLOG_ENABLED
    extern Lock iolock;
 #  include "core_manager.h"
@@ -189,7 +189,8 @@ SubsecondTime
 DramCntlr::runDramPerfModel(core_id_t requester, SubsecondTime time, IntPtr address, DramCntlrInterface::access_t access_type, ShmemPerf *perf)
 {
    UInt64 pkt_size = getCacheBlockSize();
-   SubsecondTime dram_access_latency = m_dram_perf_model->getAccessLatency(time, pkt_size, requester, address, access_type, perf);
+   IntPtr phy_addr = m_address_translator ? m_address_translator->getLinearAddress(address) : address;
+   SubsecondTime dram_access_latency = m_dram_perf_model->getAccessLatency(time, pkt_size, requester, phy_addr, access_type, perf);
    return dram_access_latency;
 }
 

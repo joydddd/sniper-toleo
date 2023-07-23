@@ -21,6 +21,8 @@ class CXLPerfModel
       SubsecondTime m_total_queueing_delay;
       SubsecondTime m_total_access_latency;
 
+      FILE* f_trace;
+
 
      public:
       CXLPerfModel(cxl_id_t cxl_id, ComponentBandwidth cxl_banchwidth, SubsecondTime cxl_access_cost, UInt64 cache_block_size /* in bits */);

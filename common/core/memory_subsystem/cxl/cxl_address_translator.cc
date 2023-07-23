@@ -3,6 +3,8 @@
 #include "simulator.h"
 #include <cmath>
 #include <random>
+#include "config.h"
+#include "config.hpp"
 
 #define MAX_PAGE_NUM_BITS 56
 
@@ -25,7 +27,7 @@
 
 CXLAddressTranslator::CXLAddressTranslator(
       std::vector<UInt64> cxl_memory_expander_size,
-      std::vector<core_id_t> cxl_cntlr_core_list, UInt32 page_size,
+      std::vector<core_id_t> cxl_cntlr_core_list, UInt32 page_size, UInt32 cacheline_size,
       UInt64 dram_total_size):
       m_num_cxl_devs(cxl_memory_expander_size.size()),
       m_dram_size(dram_total_size),
@@ -57,6 +59,25 @@ CXLAddressTranslator::CXLAddressTranslator(
            m_memory_portion[i] = (float)m_cxl_dev_size[i] / total_memory_size;
        }
    f_page_table = fopen("page_table.log", "w+");
+
+   // Remap MAC address to the end of each page. 
+   m_has_mac = Sim()->getCfg()->getBool("perf_model/mee/enable"); // if allocate extra space for mac. 
+   m_mac_size_per_page = Sim()->getCfg()->getInt("perf_model/mee/mac_length") ; // mac_length in bits
+   m_mac_size_per_page = (m_mac_size_per_page * (page_size / cacheline_size)) / 8; // covert to bytes per page
+}
+
+IntPtr CXLAddressTranslator::getMACaddr(IntPtr address){
+   static UInt32 mac_size = Sim()->getCfg()->getInt("perf_model/mee/mac_length"); // in bits
+   static UInt32 cache_block_size = Sim()->getCfg()->getInt("perf_model/l2_cache/cache_block_size"); // in bytes
+   static UInt32 mac_per_cacheline = (cache_block_size * 8) / mac_size;
+   static UInt32 page_offset = Sim()->getCfg()->getInt("system/addr_trans/page_offset");
+   IntPtr vpn = address >> page_offset;
+   IntPtr mac_addr = (address & (((IntPtr)1 << page_offset) - 1)) / mac_per_cacheline;
+   mac_addr = (mac_addr / cache_block_size) * cache_block_size; // round down to cacheline boundary
+   mac_addr = MAC_MARK | (vpn << page_offset) | mac_addr;
+   // fprintf(stderr, "addr: 0x%016lx -> mac_addr: 0x%016lx\n", address, mac_addr);
+   LOG_ASSERT_ERROR( (MAC_MASK & address) == 0, "MAC address 0x%016lx exceeds the limit 0x%016lx", mac_addr, MAC_MASK);
+   return mac_addr;
 }
 
 CXLAddressTranslator::~CXLAddressTranslator()
@@ -72,7 +93,7 @@ CXLAddressTranslator::~CXLAddressTranslator()
 cxl_id_t CXLAddressTranslator::getHome(IntPtr address)
 {
    cxl_id_t cxl_id = getPPN(address) >> MAX_PAGE_NUM_BITS;
-   MYLOG("%016lx -> cxl_id: %d", address, cxl_id);
+   MYLOG("0x%016lx -> cxl_id: %d", address, cxl_id);
    return cxl_id;
 }
 
@@ -90,16 +111,32 @@ IntPtr CXLAddressTranslator::getLinearPage(IntPtr address)
 
 IntPtr CXLAddressTranslator::getLinearAddress(IntPtr address)
 {
-   return getLinearPage(address) << m_page_offset | (address & (((IntPtr)1 << m_page_offset) - 1));
+   IntPtr linear_addr; 
+   if ((address & MAC_MASK) == MAC_MARK){ // mac_address
+      LOG_ASSERT_ERROR(m_has_mac, "address 0x%016lx is a mac address but mac is not enabled", address);
+      LOG_ASSERT_ERROR((address & (((IntPtr)1 << m_page_offset) - 1)) < m_mac_size_per_page, "mac_addr 0x%016lx has offset larger than mac_size_per_page", address);
+      linear_addr = getLinearPage(address) * (m_page_size + m_mac_size_per_page) +
+             m_page_size + (address & (((IntPtr)1 << m_page_offset) - 1));
+   } else {
+      if (m_has_mac){
+         linear_addr =  getLinearPage(address) * (m_page_size + m_mac_size_per_page) + 
+         (address & (((IntPtr)1 << m_page_offset) - 1));
+      } else {
+         linear_addr =  getLinearPage(address) << m_page_offset | (address & (((IntPtr)1 << m_page_offset) - 1));
+      }
+   }
+   MYLOG("Linear addr: 0x%016lx -> 0x%016lx\n", address, linear_addr);
+   return linear_addr;
 }
 
 IntPtr CXLAddressTranslator::getPPN(IntPtr address)
 {
-   IntPtr vpn = address >> m_page_offset;
+   IntPtr vpn = (m_has_mac ? (address & ~(MAC_MASK)) : address ) >> m_page_offset;
    IntPtr ppn = 0;
    auto it_vpn = m_addr_map.find(vpn);
    if (it_vpn == m_addr_map.end()){
       // page have never been accessed before
+      LOG_ASSERT_ERROR( (address & MAC_MASK) != MAC_MARK, "address 0x%016lx is a mac address but page has never been allocated", address)
       ppn = allocatePage(vpn);
    } else {
       ppn = it_vpn->second;
@@ -119,7 +156,7 @@ IntPtr CXLAddressTranslator::allocatePage(IntPtr vpn){
 
    IntPtr ppn = (UInt64)(m_last_allocated >= m_num_cxl_devs ? HOST_CXL_ID : m_last_allocated) << MAX_PAGE_NUM_BITS | m_num_allocated_pages[m_last_allocated];
    m_addr_map[vpn] = ppn;
-   MYLOG("[vpn]%016lx -> [ppn]%016lx", vpn, ppn);
+   MYLOG("[vpn]0x%016lx -> [ppn]0x%016lx", vpn, ppn);
    printPageUsage();
    return ppn;
 }
@@ -136,7 +173,7 @@ void CXLAddressTranslator::printPageUsage(){
 void CXLAddressTranslator::printPageTable(){
    fprintf(f_page_table, "Page Table:\n");
    for (auto it = m_addr_map.begin(); it != m_addr_map.end(); it++){
-      fprintf(f_page_table, "\t%016lx -> %016lx\n", it->first, it->second);
+      fprintf(f_page_table, "\t0x%016lx -> 0x%016lx\n", it->first, it->second);
    }
    fprintf(f_page_table, "=====================================\n");
 }

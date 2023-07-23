@@ -8,12 +8,12 @@
 
 class MEENaive : public MEEBase {
     private:
-     UInt32 m_mac_cache_size /* in bytes */, m_mac_per_cacheline;
-     SubsecondTime m_mac_cache_tag_latency, m_mac_cache_data_latency;
+     UInt32 m_mee_cache_size /* in bytes */, m_mac_per_cacheline;
+     SubsecondTime m_mee_cache_tag_latency, m_mee_cache_data_latency;
 
-     UInt64 m_mac_gen_misses, m_mac_verify_misses;
+     UInt64 m_mac_gen_misses, m_mac_fetch_misses;
 
-     Cache* m_mac_cache;
+     Cache* m_mee_cache;
      MEEPerfModel *m_mme_perf_model;
      
      CXLCntlrInterface* m_cxl_cntlr;
@@ -23,7 +23,7 @@ class MEENaive : public MEEBase {
      FILE* f_trace;
      bool m_enable_trace;
 
-     boost::tuple<SubsecondTime, HitWhere::where_t> accessMAC(
+     boost::tuple<SubsecondTime, SubsecondTime, HitWhere::where_t> accessMACVN(
          IntPtr address, Cache::access_t access, core_id_t requester,
          SubsecondTime now, ShmemPerf *perf);
 
@@ -37,8 +37,11 @@ class MEENaive : public MEEBase {
      boost::tuple<SubsecondTime, HitWhere::where_t> genMAC(
          IntPtr address, core_id_t requester, SubsecondTime now);
 
-     boost::tuple<SubsecondTime, HitWhere::where_t> verifyMAC(
-         IntPtr address, core_id_t requester, SubsecondTime now, ShmemPerf *perf);
+     SubsecondTime verifyMAC(IntPtr address, core_id_t requester,
+                             SubsecondTime now, ShmemPerf* perf);
+     boost::tuple<SubsecondTime, SubsecondTime, HitWhere::where_t> fetchMACVN(
+         IntPtr address, core_id_t requester, SubsecondTime now,
+         ShmemPerf* perf);
      SubsecondTime encryptData(IntPtr address, core_id_t requester, SubsecondTime now);
      SubsecondTime decryptData(IntPtr address, core_id_t requester, SubsecondTime now, ShmemPerf *perf);
 
