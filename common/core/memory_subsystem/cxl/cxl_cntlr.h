@@ -39,6 +39,8 @@ class CXLCntlr : public CXLCntlrInterface
 
      void enablePerfModel();
      void disablePerfModel();
+
+     friend class CXLVNServerCntlr;
 };
 
 #endif // __CXL_CNTLR_H

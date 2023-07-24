@@ -12,6 +12,7 @@ class DramMEECntlr : public DramCntlrInterface
      MEEBase* m_mee;
      FILE* f_trace;
      UInt64 m_reads, m_writes;
+     UInt64 m_mac_reads, m_mac_writes;
 
      SubsecondTime getVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
      SubsecondTime updateVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);

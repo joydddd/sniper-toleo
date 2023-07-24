@@ -20,6 +20,7 @@ class MEEPerfModel {
 
      SubsecondTime m_total_queueing_delay;
      SubsecondTime m_total_crypto_latency;
+     SubsecondTime m_total_mac_latency;
 
     public:
      MEEPerfModel(core_id_t mee_id);

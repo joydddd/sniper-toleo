@@ -141,6 +141,12 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     ('  num dram accesses', 'dram.accesses', str),
     ('  average dram access latency (ns)', 'dram.avglatency', format_ns(2)),
   ]
+  
+  if 'dram.data-reads' in results:
+    results['dram.data-accesses'] = map(sum, zip(results['dram.data-reads'], results['dram.data-writes']))
+    results['dram.mac-accesses'] = map(sum, zip(results['dram.mac-reads'], results['dram.mac-writes']))
+    template.append(('  num data accesses', 'dram.data-accesses', str))
+    template.append(('  num mac accesses', 'dram.mac-accesses', str))
   if 'dram.total-read-queueing-delay' in results:
     results['dram.avgqueueread'] = map(lambda (a,b): a/(b or 1), zip(results['dram.total-read-queueing-delay'], results['dram.reads']))
     results['dram.avgqueuewrite'] = map(lambda (a,b): a/(b or 1), zip(results['dram.total-write-queueing-delay'], results['dram.writes']))
@@ -150,7 +156,7 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     results['dram.avgqueue'] = map(lambda (a,b): a/(b or 1), zip(results.get('dram.total-queueing-delay', [0]*ncores), results['dram.accesses']))
     template.append(('  average dram queueing delay', 'dram.avgqueue', format_ns(2)))
   if 'dram-queue.total-time-used' in results:
-    results['dram.bandwidth'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['dram-queue.total-time-used'])
+    results['dram.bandwidth'] = map(lambda a: float(100)*a/time0 if time0 else float('inf'), results['dram-queue.total-time-used'])
     template.append(('  average dram bandwidth utilization', 'dram.bandwidth', lambda v: '%.2f%%' % v))
   
   # CXL access Summary
@@ -162,6 +168,11 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
       ('  num cxl accesses', 'cxl.accesses', str),
       ('  average cxl access latency (ns)', 'cxl.avglatency', format_ns(2)),
     ]
+    if 'cxl.data-reads' in results:
+      results['cxl.data-accesses'] = map(sum, zip(results['cxl.data-reads'], results['cxl.data-writes']))
+      results['cxl.mac-accesses'] = map(sum, zip(results['cxl.mac-reads'], results['cxl.mac-writes']))
+      template.append(('  num data accesses', 'cxl.data-accesses', str))
+      template.append(('  num mac accesses', 'cxl.mac-accesses', str))
     if 'cxl.total-read-queueing-delay' in results:
       results['cxl.avgqueueread'] = map(lambda (a,b): a/(b or 1), zip(results['cxl.total-read-queueing-delay'], results['cxl.reads']))
       results['cxl.avgqueuewrite'] = map(lambda (a,b): a/(b or 1), zip(results['cxl.total-write-queueing-delay'], results['cxl.writes']))
@@ -174,13 +185,26 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
       results['cxl.bandwidth'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['cxl-queue.total-time-used'])
       template.append(('  average cxl bandwidth utilization', 'cxl.bandwidth', lambda v: '%.2f%%' % v))
   
+  if 'page_table.pages' in results:
+    results['page_table.usage'] = map(lambda a: float(config['system/addr_trans/page_size']) * a / (1024*1024), results['page_table.pages'])
+    template += [
+      ('Page Tabel summary', '', ''),
+      ('  num pages [cxl, dram]', 'page_table.pages', str),
+      ('  usage (GB) [cxl, dram]', 'page_table.usage', lambda v: '%.4f' % v),
+    ]
+  
   if 'mee.encrypts' in results:
-    results['mee.accesses'] = map(sum, zip(results['mee.encrypts'], results['mee.decrypts'], results['mee.macs']))
-    results['mee.avglatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['mee.total-crypto-latency'], results['mee.accesses']))
+    results['mee.crypto'] = map(sum, zip(results['mee.encrypts'], results['mee.decrypts']))
+    results['mee.mac'] = map(sum, zip(results['mee.mac-gen'], results['mee.mac-verify']))
+    results['mee.accesses'] = map(sum, zip(results['mee.crypto'], results['mee.mac']))
+    results['mee.crypto-avglatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['mee.total-crypto-latency'], results['mee.crypto']))
+    results['mee.mac-avglatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['mee.total-mac-latency'], results['mee.mac']))
     template += [
       ('MEE summary', '', ''),
-      ('  num mee crypto', 'mee.accesses', str),
-      ('  average mee crypto latency (ns)', 'mee.avglatency', format_ns(2)),
+      ('  num mee crypto', 'mee.crypto', str),
+      ('  num mee mac gen', 'mee.mac', str),
+      ('  average mee crypto latency (ns)', 'mee.crypto-avglatency', format_ns(2)),
+      ('  average mac crypto latency (ns)', 'mee.mac-avglatency', format_ns(2)),
     ]
     if 'mee.total-encrypt-queueing-delay' in results:
       results['mee.avgqueueencrypt'] = map(lambda (a,b): a/(b or 1), zip(results['mee.total-encrypt-queueing-delay'], results['mee.encrypts']))
@@ -196,10 +220,10 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
       results['mee.bandwidth'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['mee-queue.total-time-used'])
       template.append(('  average mee bandwidth utilization', 'mee.bandwidth', lambda v: '%.2f%%' % v))
     
-    if 'mee.mac_accesses' in results:
-      results['mee.mac_accesses'] = map(sum, results['mee.mac_accesses'])
-      results['mee.mac_misses'] = map(sum, results['mee.mac_misses'])
-      results['mee.mac_missrate'] = map(lambda (a,b): 100*a/float(b) if b else float('inf'), zip(results['mee.mac_misses'], results['mee.mac_accesses']))
+    if 'mee.mac_gen_misses' in results:
+      results['mee.mac_accesses'] = map(sum, zip(results['mee.mac-gen'], results['mee.mac-fetch']))
+      results['mee.mac_misses'] = map(sum, zip(results['mee.mac-gen-misses'], results['mee.mac-fetch-misses']))
+      results['mee.mac_missrate'] = map(lambda (a,b): float(100)*a/float(b) if b else float('inf'), zip(results['mee.mac_misses'], results['mee.mac_accesses']))
       template.append(('  num mac cache accesses', 'mee.mac_accesses', str))
       template.append(('  num mac cache misses', 'mee.mac_misses', str))
       template.append(('  mac cache miss rate', 'mee.mac_missrate', lambda v: '%.2f%%' % v))

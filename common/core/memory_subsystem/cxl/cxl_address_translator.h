@@ -46,7 +46,7 @@ class CXLAddressTranslator
 
       std::unordered_map<IntPtr, IntPtr> m_addr_map; // mapping Virtual Page Number to CXL Node + Linear Page Number
       std::vector<UInt64> m_cxl_dev_size; // in Bytes
-      std::vector<UInt64> m_num_allocated_pages;
+      UInt64* m_num_allocated_pages;
       std::vector<core_id_t> m_cxl_cntlr_core_list;
 
       std::vector<float> m_memory_portion;

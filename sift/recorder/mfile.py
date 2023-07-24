@@ -51,6 +51,7 @@ if not 'SDE_BUILD_KIT' in os.environ:
     sys.path.append(os.path.join(sde_bk_dir, 'pinkit', 'sde-example', 'mbuild'))
 
 import mbuild
+print(sys.path)
 import build_kit
 
 

@@ -28,8 +28,10 @@ DramMEECntlr::DramMEECntlr(MemoryManagerBase* memory_manager,
     , m_dram_cntlr(dram_cntlr)
 {
     m_mee = new MEENaive(memory_manager, shmem_perf_model, core_id, m_cache_block_size, NULL, this);
-    registerStatsMetric("dram-mee", memory_manager->getCore()->getId(), "reads", &m_reads);
-    registerStatsMetric("dram-mee", memory_manager->getCore()->getId(), "writes", &m_writes);
+    registerStatsMetric("dram", memory_manager->getCore()->getId(), "data-reads", &m_reads);
+    registerStatsMetric("dram", memory_manager->getCore()->getId(), "data-writes", &m_writes);
+    registerStatsMetric("dram", memory_manager->getCore()->getId(), "mac-reads", &m_mac_reads);
+    registerStatsMetric("dram", memory_manager->getCore()->getId(), "mac-writes", &m_mac_writes);
 
 #ifdef MYLOG_ENABLED
    std::ostringstream trace_filename;
@@ -74,6 +76,7 @@ SubsecondTime DramMEECntlr::updateVN(IntPtr address, core_id_t requester, Byte* 
 
 SubsecondTime DramMEECntlr::getMAC(IntPtr mac_addr, core_id_t requester, Byte* buf, SubsecondTime now, ShmemPerf *perf){
     MYLOG("[%d]getMAC @ %016lx ", requester, mac_addr);
+    m_mac_reads++;
     /* read MAC to dram */
     SubsecondTime dram_latency;
     HitWhere::where_t hit_where;
@@ -84,6 +87,7 @@ SubsecondTime DramMEECntlr::getMAC(IntPtr mac_addr, core_id_t requester, Byte* b
 
 SubsecondTime DramMEECntlr::putMAC(IntPtr mac_addr, core_id_t requester, Byte* buf, SubsecondTime now){
     MYLOG("[%d]putMAC @ %016lx ", requester, mac_addr);
+    m_mac_writes++;
     /* write MAC to dram */
     SubsecondTime dram_latency;
     HitWhere::where_t hit_where;
@@ -94,7 +98,6 @@ SubsecondTime DramMEECntlr::putMAC(IntPtr mac_addr, core_id_t requester, Byte* b
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
 DramMEECntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
-    m_reads++;
     MYLOG("[%d]R @ %016lx ", requester, address);
     SubsecondTime dram_latency, decrypt_latency, latency = SubsecondTime::Zero(); 
     HitWhere::where_t hit_where;
@@ -112,13 +115,13 @@ DramMEECntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_bu
         hit_where = HitWhere::CXL_VN;
     }
     latency = mac_latency > dram_latency ? mac_latency : dram_latency;
+    m_reads++;
     return boost::tuple<SubsecondTime, HitWhere::where_t>(latency, hit_where); // latency when MAC is ready
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
 /* request updated VN, but not writing to dram yet */
 DramMEECntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
-    m_writes++;
     MYLOG("[%d]W @ %016lx ", requester, address);
     SubsecondTime dram_latency;
     HitWhere::where_t hit_where;
@@ -129,6 +132,7 @@ DramMEECntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf,
     } 
     // data is located at local dram, our MEE will handle encryption & MAC
     updateVN(address, requester, data_buf, now, &m_dummy_shmem_perf); // fetch updated VN
+    m_writes++;
     return boost::tuple<SubsecondTime, HitWhere::where_t>(SubsecondTime::Zero(), HitWhere::CXL_VN);
 }
 

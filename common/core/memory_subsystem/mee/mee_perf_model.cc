@@ -14,11 +14,13 @@ MEEPerfModel::MEEPerfModel(core_id_t mee_id):
     m_aes_latency(SubsecondTimeCycleConverter(&m_mee_period).cyclesToSubsecondTime(Sim()->getCfg()->getInt("perf_model/mee/latency"))),
     m_aes_bandwidth(Sim()->getCfg()->getInt("perf_model/mee/bandwidth") * m_mee_freq), // num of cipher per ns
     m_total_queueing_delay(SubsecondTime::Zero()),
-    m_total_crypto_latency(SubsecondTime::Zero())
+    m_total_crypto_latency(SubsecondTime::Zero()),
+    m_total_mac_latency(SubsecondTime::Zero())
 {
     m_queue_model = QueueModel::create("mee-queue", m_mee_id, Sim()->getCfg()->getString("perf_model/mee/queue_type"), m_aes_bandwidth.getRoundedLatency(1));
 
     registerStatsMetric("mee", m_mee_id, "total-crypto-latency", &m_total_crypto_latency);
+    registerStatsMetric("mee", m_mee_id, "total-mac-latency", &m_total_mac_latency);
     registerStatsMetric("mee", m_mee_id, "total-queueing-delay", &m_total_queueing_delay);
 
 }
@@ -45,7 +47,17 @@ SubsecondTime MEEPerfModel::getcryptoLatency(SubsecondTime now, core_id_t reques
 
     // Update Memory Counters
     m_num_accesses++;
-    m_total_crypto_latency += access_latency;
+    switch(op_type){
+        case MEEBase::GEN_MAC:
+            m_total_mac_latency += access_latency;
+            break;
+        case MEEBase::DECRYPT:
+        case MEEBase::ENCRYPT:
+            m_total_crypto_latency += access_latency;
+            break;
+        default:
+            LOG_ASSERT_ERROR(false, "Unknown MEE operation type %d", op_type);
+    }
     m_total_queueing_delay += queue_delay;
 
     return  access_latency;

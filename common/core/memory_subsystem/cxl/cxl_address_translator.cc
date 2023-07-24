@@ -1,8 +1,10 @@
 #include "cxl_address_translator.h"
 #include "log.h"
 #include "simulator.h"
+#include "stats.h"
 #include <cmath>
 #include <random>
+#include <cstring>
 #include "config.h"
 #include "config.hpp"
 
@@ -33,8 +35,9 @@ CXLAddressTranslator::CXLAddressTranslator(
       m_dram_size(dram_total_size),
       m_page_size(page_size),
       m_page_offset(log2(page_size)),
+      m_mac_size_per_page(0),
       m_cxl_dev_size(cxl_memory_expander_size),
-      m_num_allocated_pages(m_num_cxl_devs + 1, 0),
+      m_num_allocated_pages(NULL),
       m_cxl_cntlr_core_list(cxl_cntlr_core_list),
       m_last_allocated(0),
       f_page_table(NULL)
@@ -62,8 +65,21 @@ CXLAddressTranslator::CXLAddressTranslator(
 
    // Remap MAC address to the end of each page. 
    m_has_mac = Sim()->getCfg()->getBool("perf_model/mee/enable"); // if allocate extra space for mac. 
-   m_mac_size_per_page = Sim()->getCfg()->getInt("perf_model/mee/mac_length") ; // mac_length in bits
-   m_mac_size_per_page = (m_mac_size_per_page * (page_size / cacheline_size)) / 8; // covert to bytes per page
+   if (m_has_mac) {
+      m_mac_size_per_page = Sim()->getCfg()->getInt("perf_model/mee/mac_length") ; // mac_length in bits
+      m_mac_size_per_page = (m_mac_size_per_page * (page_size / cacheline_size)) / 8; // covert to bytes per page
+   }
+
+   // Allocate arrays
+   m_num_allocated_pages = (UInt64*)malloc(sizeof(UInt64) * (m_num_cxl_devs + 1));
+   memset(m_num_allocated_pages, 0, sizeof(UInt64) * (m_num_cxl_devs + 1));
+
+   // register stats for page mapping 
+   for (cxl_id_t cxl_id = 0; cxl_id < m_num_cxl_devs; ++cxl_id){
+      registerStatsMetric("page_table", cxl_id, "pages", &m_num_allocated_pages[cxl_id]);
+   }
+   registerStatsMetric("page_table", m_num_cxl_devs, "pages", &m_num_allocated_pages[m_num_cxl_devs]);
+   
 }
 
 IntPtr CXLAddressTranslator::getMACaddr(IntPtr address){
