@@ -348,6 +348,7 @@ char *argv;
   InitU(N,umain);               /* initialize u arrays*/
   InitU2(N,umain2,rootN);
 
+  fprintf(stderr, "[ROI START]");
   SimRoiStart();
   SimNamedMarker(4, "begin");
 
@@ -376,6 +377,7 @@ char *argv;
 
   SimNamedMarker(5, "end");
   SimRoiEnd();
+  fprintf(stderr, "[ROI END]");
 
   if (doprint) {
     if (test_result) {
