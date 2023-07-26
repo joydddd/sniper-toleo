@@ -185,6 +185,22 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
       results['cxl.bandwidth'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['cxl-queue.total-time-used'])
       template.append(('  average cxl bandwidth utilization', 'cxl.bandwidth', lambda v: '%.2f%%' % v))
   
+  if 'vn-vault.reads' in results:
+    results['vn-vault.accesses'] = map(sum, zip(results['vn-vault.reads'], results['vn-vault.updates']))
+    results['vn-vault.avglatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['vn-vault.total-access-latency'], results['vn-vault.accesses']))
+    template += [
+      ('VN Vault summary', '', ''),
+      ('  num vn-vault accesses', 'vn-vault.accesses', str),
+      ('  average vn-vault access latency (ns)', 'vn-vault.avglatency', format_ns(2)),
+    ]
+    if 'vn-vault.total-queueing-delay' in results:
+      results['vn-vault.avgqueue'] = map(lambda (a,b): a/(b or 1), zip(results['vn-vault.total-queueing-delay'], results['vn-vault.accesses']))
+      template.append(('  average vn-vault queueing delay', 'vn-vault.avgqueue', format_ns(2)))
+    if 'vn-queue.total-time-used' in results:
+      results['vn-vault.bandwidth'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['vn-queue.total-time-used'])
+      template.append(('  average cxl bandwidth utilization', 'vn-vault.bandwidth', lambda v: '%.2f%%' % v))
+    
+  
   if 'page_table.pages' in results:
     results['page_table.usage'] = map(lambda a: float(config['system/addr_trans/page_size']) * a / (1024*1024), results['page_table.pages'])
     template += [

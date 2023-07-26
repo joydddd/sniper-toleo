@@ -82,11 +82,12 @@ DramCntlrInterface::handleMsgFromCXLCntlr(core_id_t tag_dir, PrL1PrL2DramDirecto
    {
       case PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_READ_REP:
       {
+         Byte data_buf[getCacheBlockSize()];
          IntPtr address = shmem_msg->getAddress();
          MYLOG("[dram cntlr %d] handle CXL R REP @%016lx\n", getMemoryManager()->getCore()->getId(), address);
 
          // write to dram cache. Latency is ignored for cache write.
-         handleDataFromCXL(address, shmem_msg->getRequester(), shmem_msg->getDataBuf(), msg_time, shmem_msg->getPerf());
+         handleDataFromCXL(address, shmem_msg->getRequester(), data_buf, msg_time, shmem_msg->getPerf());
          
          // forward message to TAG_DIR
          MYLOG("[dram cntlr %d] send R REP (forward cxl) to [tag dir %d] @%016lx\n", getMemoryManager()->getCore()->getId(), tag_dir, address);
@@ -94,7 +95,7 @@ DramCntlrInterface::handleMsgFromCXLCntlr(core_id_t tag_dir, PrL1PrL2DramDirecto
                   MemComponent::DRAM, MemComponent::TAG_DIR,
                   shmem_msg->getRequester(), /* requester */
                   tag_dir,           /* receiver */
-                  shmem_msg->getAddress(), shmem_msg->getDataBuf(),
+                  shmem_msg->getAddress(), data_buf,
                   getCacheBlockSize(), 
                   shmem_msg->getWhere(),
                   shmem_msg->getPerf(), ShmemPerfModel::_SIM_THREAD);
@@ -103,11 +104,12 @@ DramCntlrInterface::handleMsgFromCXLCntlr(core_id_t tag_dir, PrL1PrL2DramDirecto
 
       case PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_VN_REP:
       {
+         Byte data_buf[getCacheBlockSize()];
          IntPtr address = shmem_msg->getAddress();
          MYLOG("[dram cntlr %d] handle CXL VN REP @%016lx\n", getMemoryManager()->getCore()->getId(), address);
          
          // verify VN and write to dram_cache. 
-         SubsecondTime verify_latency = handleVNverifyFromCXL(address, shmem_msg->getRequester(), shmem_msg->getDataBuf(), msg_time, shmem_msg->getPerf());
+         SubsecondTime verify_latency = handleVNverifyFromCXL(address, shmem_msg->getRequester(), data_buf, msg_time, shmem_msg->getPerf());
 
          // forward message to TAG_DIR
          getShmemPerfModel()->incrElapsedTime(verify_latency, ShmemPerfModel::_SIM_THREAD);
@@ -117,7 +119,7 @@ DramCntlrInterface::handleMsgFromCXLCntlr(core_id_t tag_dir, PrL1PrL2DramDirecto
                   MemComponent::DRAM, MemComponent::TAG_DIR,
                   shmem_msg->getRequester(), /* requester */
                   tag_dir,           /* receiver */
-                  shmem_msg->getAddress(), shmem_msg->getDataBuf(),
+                  shmem_msg->getAddress(), data_buf,
                   getCacheBlockSize(), 
                   shmem_msg->getWhere(),
                   shmem_msg->getPerf(), ShmemPerfModel::_SIM_THREAD);
