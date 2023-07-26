@@ -3,8 +3,8 @@
 #include "simulator.h"
 #include "stats.h"
 #include <cmath>
-#include <random>
 #include <cstring>
+#include <random>
 #include "config.h"
 #include "config.hpp"
 
@@ -12,7 +12,7 @@
 
 
 // DEBUG:
-#if 1
+#if 0
 #  define MYLOG_ENABLED
    extern Lock iolock;
 #  include "core_manager.h"
@@ -42,25 +42,30 @@ CXLAddressTranslator::CXLAddressTranslator(
       m_last_allocated(0),
       f_page_table(NULL)
 {
-       // Each Block Address is as follows:
-       // ////////////////////////////////////////////////////////////////////////////////////////////////////
-       //  63 - 56 |
-       //  cxl_node_id  (HOST_CXL_ID for dram)          |  page_num //
-       // ////////////////////////////////////////////////////////////////////////////////////////////////////
+   // Each Block Address is as follows:
+   // ////////////////////////////////////////////////////////////////////////////////////////////////////
+   //  63 - 56 |
+   //  cxl_node_id  (HOST_CXL_ID for dram)          |  page_num //
+   // ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-       LOG_ASSERT_ERROR((1 << m_page_offset) == (SInt32)m_page_size,
-                        "Page Size %u is not a 2^N", m_page_size);
+   LOG_ASSERT_ERROR((1 << m_page_offset) == (SInt32)m_page_size,
+                  "Page Size %u is not a 2^N", m_page_size);
 
-       UInt64 total_memory_size = m_dram_size;
-       for (auto it = m_cxl_dev_size.begin(); it != m_cxl_dev_size.end();
-            ++it) {
-           total_memory_size += *it;
-       }
+   UInt64 total_memory_size = m_dram_size;
+   for (auto it = m_cxl_dev_size.begin(); it != m_cxl_dev_size.end();
+      ++it) {
+      total_memory_size += *it;
+   }
 
-       m_memory_portion.resize(m_num_cxl_devs + 1);
-       for (unsigned int i = 0; i < m_num_cxl_devs; i++) {
-           m_memory_portion[i] = (float)m_cxl_dev_size[i] / total_memory_size;
-       }
+   m_memory_portion.resize(m_num_cxl_devs + 1);
+   float accumuated_portion = 0;
+   for (unsigned int i = 0; i < m_num_cxl_devs; i++) {
+      m_memory_portion[i] = (float)m_cxl_dev_size[i] / total_memory_size + accumuated_portion;
+      accumuated_portion = m_memory_portion[i] ;
+   }
+   m_memory_portion[m_num_cxl_devs] = 1.0;
+
+
    f_page_table = fopen("page_table.log", "w+");
 
    // Remap MAC address to the end of each page. 
@@ -160,10 +165,32 @@ IntPtr CXLAddressTranslator::getPPN(IntPtr address)
    return ppn;
 }
 
+/* TODO: smartly decide whether a page is located on cxl or host dram */
 
+/* Round Robin allocation */
+// IntPtr CXLAddressTranslator::allocatePage(IntPtr vpn){
+//    m_last_allocated = (m_last_allocated + 1) % (m_num_cxl_devs + 1);
+//    ++m_num_allocated_pages[m_last_allocated];
+
+//    LOG_ASSERT_ERROR(m_num_allocated_pages[m_last_allocated] < ((IntPtr)1 << MAX_PAGE_NUM_BITS),
+//          "Number of pages allocated to cxl node %u exceeds the limit %u",
+//          m_last_allocated, ((IntPtr)1 << MAX_PAGE_NUM_BITS) - 1);
+
+//    IntPtr ppn = (UInt64)(m_last_allocated >= m_num_cxl_devs ? HOST_CXL_ID : m_last_allocated) << MAX_PAGE_NUM_BITS | m_num_allocated_pages[m_last_allocated];
+//    m_addr_map[vpn] = ppn;
+//    MYLOG("[vpn]0x%016lx -> [ppn]0x%016lx", vpn, ppn);
+//    printPageUsage();
+//    return ppn;
+// }
+
+/* Random Allocation w.r.t to size. */
 IntPtr CXLAddressTranslator::allocatePage(IntPtr vpn){
-   /* TODO: smartly decide whether a page is located on cxl or host dram */
-   m_last_allocated = (m_last_allocated + 1) % (m_num_cxl_devs + 1);
+   float rand_loc = (float)rand() / (float)RAND_MAX;
+   for (m_last_allocated = 0; m_last_allocated < m_num_cxl_devs + 1; m_last_allocated++){
+      if (m_memory_portion[m_last_allocated] >= rand_loc){
+         break;
+      }
+   }
    ++m_num_allocated_pages[m_last_allocated];
 
    LOG_ASSERT_ERROR(m_num_allocated_pages[m_last_allocated] < ((IntPtr)1 << MAX_PAGE_NUM_BITS),
@@ -173,7 +200,9 @@ IntPtr CXLAddressTranslator::allocatePage(IntPtr vpn){
    IntPtr ppn = (UInt64)(m_last_allocated >= m_num_cxl_devs ? HOST_CXL_ID : m_last_allocated) << MAX_PAGE_NUM_BITS | m_num_allocated_pages[m_last_allocated];
    m_addr_map[vpn] = ppn;
    MYLOG("[vpn]0x%016lx -> [ppn]0x%016lx", vpn, ppn);
+#ifdef MYLOG_ENABLED
    printPageUsage();
+#endif // MYLOG_ENABLED
    return ppn;
 }
 

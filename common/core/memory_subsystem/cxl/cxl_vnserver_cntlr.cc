@@ -4,7 +4,7 @@
 #include "config.hpp"
 #include "mee_naive.h"
 
-#if 1
+#if 0
 #  define MYLOG_ENABLED
    extern Lock iolock;
 #  include "core_manager.h"

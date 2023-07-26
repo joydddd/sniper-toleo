@@ -7,7 +7,7 @@
 #include "cxl_vnserver_cntlr.h"
 #include "dram_mee_cntlr.h"
 
-#if 1
+#if 0
 #define MYLOG_ENABLED
  extern Lock iolock;
 #include "core_manager.h"

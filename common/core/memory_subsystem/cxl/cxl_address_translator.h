@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <random>
 
 #include "fixed_types.h"
 
