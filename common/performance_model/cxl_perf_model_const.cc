@@ -1,4 +1,4 @@
-#include "cxl_perf_model.h"
+#include "cxl_perf_model_const.h"
 #include "simulator.h"
 #include "config.h"
 #include "config.hpp"
@@ -23,19 +23,27 @@
 #define MYTRACE(...) {}
 #endif
 
-CXLPerfModel::CXLPerfModel(cxl_id_t cxl_id, ComponentBandwidth cxl_banchwidth, SubsecondTime cxl_access_cost, UInt64 cache_block_size /* in bits */):
-    m_enabled(false),
-    m_num_accesses(0),
-    m_cxl_id(cxl_id),
+CXLPerfModelConstant::CXLPerfModelConstant(cxl_id_t cxl_id, UInt64 transaction_size /* in bits */):
+    CXLPerfModel(cxl_id, transaction_size),
     m_queue_model(NULL),
-    m_cxl_access_cost(cxl_access_cost),
-    m_cxl_bandwidth(cxl_banchwidth),
+    m_cxl_bandwidth(8 * Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_" + itostr((unsigned int)cxl_id) + "/bandwidth")),
     m_total_queueing_delay(SubsecondTime::Zero()),
     m_total_access_latency(SubsecondTime::Zero())
 {
-    m_queue_model = QueueModel::create("cxl-queue", cxl_id, Sim()->getCfg()->getString("perf_model/cxl/queue_type"),
-                                       m_cxl_bandwidth.getRoundedLatency(cache_block_size));
-    
+    m_cxl_access_cost =
+        SubsecondTime::FS() *
+        static_cast<uint64_t>(
+            TimeConverter<float>::NStoFS(Sim()->getCfg()->getFloat(
+                "perf_model/cxl/memory_expander_" + itostr((unsigned int)cxl_id) + "/cxl_latency"))) + 
+        SubsecondTime::FS() *
+        static_cast<uint64_t>(
+            TimeConverter<float>::NStoFS(Sim()->getCfg()->getFloat(
+                "perf_model/cxl/memory_expander_" + itostr((unsigned int)cxl_id) + "/ddr_latency")));
+    m_queue_model = QueueModel::create(
+        "cxl-queue", cxl_id,
+        Sim()->getCfg()->getString("perf_model/cxl/queue_type"),
+        m_cxl_bandwidth.getRoundedLatency(transaction_size));
+
     registerStatsMetric("cxl", cxl_id, "total-access-latency", &m_total_access_latency);
     registerStatsMetric("cxl", cxl_id, "total-queueing-delay", &m_total_queueing_delay);
 
@@ -47,7 +55,7 @@ CXLPerfModel::CXLPerfModel(cxl_id_t cxl_id, ComponentBandwidth cxl_banchwidth, S
 #endif // MYTRACE_ENABLED
 }
 
-CXLPerfModel::~CXLPerfModel()
+CXLPerfModelConstant::~CXLPerfModelConstant()
 {
     if (m_queue_model)
     {
@@ -56,7 +64,7 @@ CXLPerfModel::~CXLPerfModel()
     }
 }
 
-SubsecondTime CXLPerfModel::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size, core_id_t requester, IntPtr address, CXLCntlrInterface::access_t access_type, ShmemPerf *perf)
+SubsecondTime CXLPerfModelConstant::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size, core_id_t requester, IntPtr address, CXLCntlrInterface::access_t access_type, ShmemPerf *perf)
 {
     // pkt_size is in 'bits'
     // m_dram_bandwidth is in 'Bits per clock cycle'
@@ -77,14 +85,6 @@ SubsecondTime CXLPerfModel::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_
             perf->updateTime(pkt_time + queue_delay, ShmemPerf::CXL_QUEUE);
             perf->updateTime(pkt_time + queue_delay + processing_time, ShmemPerf::CXL_BUS);
             perf->updateTime(pkt_time + queue_delay + processing_time + m_cxl_access_cost, ShmemPerf::CXL_DEVICE);
-            break;
-        case CXLCntlrInterface::VN_READ:
-            MYTRACE("VN_R ==%s== @ %016lx", itostr(pkt_time + queue_delay + processing_time).c_str(), address);
-            perf->updateTime(pkt_time + queue_delay + processing_time, ShmemPerf::VN);
-            perf->updateTime(pkt_time + queue_delay + processing_time + m_cxl_access_cost, ShmemPerf::VN_DEVICE);
-            break;
-        case CXLCntlrInterface::VN_UPDATE:
-            MYTRACE("VN_U ==%s== @ %016lx", itostr(pkt_time + queue_delay + processing_time).c_str(), address);
             break;
         case CXLCntlrInterface::WRITE:
             MYTRACE("W ==%s== @ %016lx", itostr(pkt_time + queue_delay + processing_time).c_str(), address);

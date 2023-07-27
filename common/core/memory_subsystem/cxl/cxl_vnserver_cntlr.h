@@ -9,7 +9,7 @@
 #include "cache.h"
 #include "fixed_types.h"
 #include "cxl_address_translator.h"
-#include "cxl_vn_perf_model.h"
+#include "cxl_perf_model.h"
 #include "cxl_cntlr.h"
 #include "mee_base.h"
 #include "memory_manager_base.h"
@@ -26,7 +26,7 @@ class CXLVNServerCntlr : public CXLCntlrInterface
      UInt64 *m_data_reads, *m_data_writes; // cxl data reads and write
      UInt64 *m_mac_reads, *m_mac_writes; // cxl memory expander reads and writes due to mac access. 
 
-     CXLVNPerfModel* m_vn_perf_model;
+     CXLPerfModel* m_vn_perf_model;
      CXLCntlr* m_cxl_cntlr;
      MEEBase* m_mee;
 

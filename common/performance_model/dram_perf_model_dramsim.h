@@ -6,43 +6,8 @@
 #include "fixed_types.h"
 #include "subsecond_time.h"
 #include "dram_cntlr_interface.h"
-#include "memory_system.h" // DRAMsim3
-#include <map>
+#include "dramsim_model.h"
 
-class DramPerfModelDramSim;
-
-class DRAMsimCntlr{
-   private:
-    uint64_t epoch_size; // cycles in one epoch
-    ComponentPeriod dram_period;
-    uint32_t ch_id;
-
-    enum DramSimStatus{
-     DRAMSIM_IDEL = 0,
-     DRAMSIM_AWAITING,
-     DRAMSIM_RUNNING,
-     DRAMSIM_DONE
-    } status_;
-    dramsim3::MemorySystem *mem_system_;
-    uint64_t clk_;
-    SubsecondTime t_start_;
-    SubsecondTime t_latest_req_;
-    uint64_t clk_latest_req_;
-    std::map<uint64_t, dramsim3::Transaction> pending_reqs_; 
-
-    DramPerfModelDramSim* perf_model_;
-
-
-    void ReadCallBack(uint64_t addr);
-    void WriteCallBack(uint64_t addr);
-    void runDRAMsim(uint64_t target_cycle);
-   public:
-      DRAMsimCntlr(DramPerfModelDramSim* perf_model, uint32_t ch_id);
-      ~DRAMsimCntlr();
-      void start();
-      void stop();
-      void addTrans(SubsecondTime t_sniper, IntPtr addr, bool is_write);
-};
 
 class DramPerfModelDramSim : public DramPerfModel {
    private:
