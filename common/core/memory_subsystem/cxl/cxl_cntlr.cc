@@ -37,22 +37,9 @@ CXLCntlr::CXLCntlr(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf
      memset(m_cxl_perf_models, 0, sizeof(CXLPerfModel*) * cxl_connected.size());
      for (cxl_id_t cxl_id = 0; cxl_id < cxl_connected.size(); ++cxl_id) {
          if (cxl_connected[cxl_id]) {
-             registerStatsMetric("cxl", cxl_id, "reads", &m_reads[cxl_id]);
-             registerStatsMetric("cxl", cxl_id, "writes", &m_writes[cxl_id]);
-             String cxl_id_str = itostr((unsigned int)cxl_id);
-             ComponentBandwidth cxl_banchwidth =
-                 8 * Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_" +
-                                           cxl_id_str + "/bandwidth");  // Convert bytes to bits
-             SubsecondTime cxl_access_cost = SubsecondTime::FS() *
-                        static_cast<uint64_t>(TimeConverter<float>::NStoFS(
-                            Sim()->getCfg()->getFloat(
-                                "perf_model/cxl/memory_expander_" + cxl_id_str +
-                                "/latency")));     // Operate in fs for higher
-                                                   // precision before converting
-                                                   // to uint64_t/SubsecondTime
              /* Create CXL perf model */;
-             m_cxl_perf_models[cxl_id] = new CXLPerfModel(cxl_id, cxl_banchwidth, cxl_access_cost, cache_block_size * 8);
-                                                                                                   /* convert from bytes to bits*/
+             m_cxl_perf_models[cxl_id] = CXLPerfModel::createCXLPerfModel(cxl_id, cache_block_size * 8); 
+             /* convert from bytes to bits*/
          }
      }
 
@@ -70,6 +57,13 @@ CXLCntlr::~CXLCntlr()
 {
    if (m_reads) free(m_reads);
    if (m_writes) free(m_writes);
+
+   for (size_t i = 0; i < m_cxl_connected.size(); ++i) {
+       if (m_cxl_perf_models[i]) {
+           delete m_cxl_perf_models[i];
+       }
+   }
+   free(m_cxl_perf_models);
 
 #ifdef MYLOG_ENABLED
    fclose(f_trace);

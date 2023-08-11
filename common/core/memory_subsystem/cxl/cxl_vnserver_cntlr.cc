@@ -38,13 +38,7 @@ CXLVNServerCntlr::CXLVNServerCntlr(
    m_mee = new MEENaive(memory_manager, shmem_perf_model, core_id + 1, cache_block_size, this);
    m_vn_length = m_mee->getVNLength(); // vn_length in bits
 
-   SubsecondTime vnserver_access_cost =
-       SubsecondTime::FS() *
-       static_cast<uint64_t>(TimeConverter<float>::NStoFS(
-           Sim()->getCfg()->getFloat("perf_model/cxl/vnserver/latency"))); 
-   ComponentBandwidth  vnserver_bandwidth =  8 * Sim()->getCfg()->getFloat("perf_model/cxl/vnserver/bandwidth");  
-      // Convert bytes to bits
-   m_vn_perf_model = new CXLVNPerfModel(0, vnserver_bandwidth, vnserver_access_cost, m_cxl_pkt_size);
+   m_vn_perf_model = CXLPerfModel::createCXLPerfModel(0, m_cxl_pkt_size);
    registerStatsMetric("vn-vault", 0, "reads", &m_vn_reads);
    registerStatsMetric("vn-vault", 0, "updates", &m_vn_updates);
    
@@ -87,6 +81,7 @@ CXLVNServerCntlr::~CXLVNServerCntlr()
    if (m_data_writes) free(m_data_writes);
    if (m_mac_reads) free(m_mac_reads);
    if (m_mac_writes) free(m_mac_writes);
+   if (m_vn_perf_model) delete m_vn_perf_model;
 #ifdef MYLOG_ENABLED
    fclose(f_trace);
 #endif // MYLOG_ENABLED

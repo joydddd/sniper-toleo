@@ -23,18 +23,20 @@
 #define MYTRACE(...) {}
 #endif
 
-CXLVNPerfModel::CXLVNPerfModel(cxl_id_t cxl_id, ComponentBandwidth cxl_banchwidth, SubsecondTime cxl_access_cost, UInt64 cache_block_size /* in bits */):
-    m_enabled(false),
-    m_num_accesses(0),
-    m_cxl_id(cxl_id),
+CXLVNPerfModel::CXLVNPerfModel(cxl_id_t cxl_id, UInt64 transaction_size /* in bits */):
+    CXLPerfModel(cxl_id, transaction_size),
     m_queue_model(NULL),
-    m_cxl_access_cost(cxl_access_cost),
-    m_cxl_bandwidth(cxl_banchwidth),
+    m_cxl_bandwidth(8 * Sim()->getCfg()->getFloat("perf_model/cxl/vnserver/bandwidth")),
     m_total_queueing_delay(SubsecondTime::Zero()),
     m_total_access_latency(SubsecondTime::Zero())
 {
+    m_cxl_access_cost =
+        SubsecondTime::FS() *
+        static_cast<uint64_t>(
+            TimeConverter<float>::NStoFS(Sim()->getCfg()->getFloat(
+                "perf_model/cxl/vnserver/latency")));
     m_queue_model = QueueModel::create("vn-queue", cxl_id, Sim()->getCfg()->getString("perf_model/cxl/queue_type"),
-                                       m_cxl_bandwidth.getRoundedLatency(cache_block_size));
+                                       m_cxl_bandwidth.getRoundedLatency(transaction_size));
     
     registerStatsMetric("vn-vault", cxl_id, "total-access-latency", &m_total_access_latency);
     registerStatsMetric("vn-vault", cxl_id, "total-queueing-delay", &m_total_queueing_delay);
@@ -71,13 +73,6 @@ SubsecondTime CXLVNPerfModel::getAccessLatency(SubsecondTime pkt_time, UInt64 pk
 
     SubsecondTime access_latency = queue_delay + processing_time + m_cxl_access_cost;
     switch(access_type){
-        case CXLCntlrInterface::READ:
-            MYTRACE("R ==%s== @ %016lx", itostr(pkt_time + queue_delay + processing_time).c_str(), address);
-            perf->updateTime(pkt_time);
-            perf->updateTime(pkt_time + queue_delay, ShmemPerf::CXL_QUEUE);
-            perf->updateTime(pkt_time + queue_delay + processing_time, ShmemPerf::CXL_BUS);
-            perf->updateTime(pkt_time + queue_delay + processing_time + m_cxl_access_cost, ShmemPerf::CXL_DEVICE);
-            break;
         case CXLCntlrInterface::VN_READ:
             MYTRACE("VN_R ==%s== @ %016lx", itostr(pkt_time + queue_delay + processing_time).c_str(), address);
             perf->updateTime(pkt_time + queue_delay + processing_time, ShmemPerf::VN);
@@ -85,9 +80,6 @@ SubsecondTime CXLVNPerfModel::getAccessLatency(SubsecondTime pkt_time, UInt64 pk
             break;
         case CXLCntlrInterface::VN_UPDATE:
             MYTRACE("VN_U ==%s== @ %016lx", itostr(pkt_time + queue_delay + processing_time).c_str(), address);
-            break;
-        case CXLCntlrInterface::WRITE:
-            MYTRACE("W ==%s== @ %016lx", itostr(pkt_time + queue_delay + processing_time).c_str(), address);
             break;
         default:
             LOG_PRINT_ERROR("Unrecognized CXL access Type: %u", access_type);
