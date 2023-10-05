@@ -29,6 +29,9 @@ graphite.out
 cpi-stack.jpg
 output_files
 tools/cpistack-collect/cpistack-*
+dramsim_**
+*.out
+*.trace
 
 # compiled libraries
 lib/libcarbon_sim.a
@@ -65,6 +68,7 @@ mbuild
 sde_kit
 capstone
 dynamorio
+DRAMsim3
 
 # Pin3 output
 frontend/pin-frontend/obj-intel64
@@ -80,3 +84,4 @@ sift/recorder/sift/*.cc
 .vscode/
 benchmarks/
 xed/
+build/

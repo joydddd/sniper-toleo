@@ -14,6 +14,8 @@ class DRAMsimCntlr{
     ComponentPeriod dram_period;
     uint32_t ch_id, dram_cntlr_id;
 
+    bool log_trace = false;
+
     enum DramSimStatus{
      DRAMSIM_IDEL = 0,
      DRAMSIM_AWAITING,
@@ -33,7 +35,7 @@ class DRAMsimCntlr{
     void WriteCallBack(uint64_t addr);
     void runDRAMsim(uint64_t target_cycle);
    public:
-      DRAMsimCntlr(uint32_t dram_cntlr_id, uint32_t ch_id, bool is_cxl = false);
+      DRAMsimCntlr(uint32_t dram_cntlr_id, uint32_t ch_id, bool is_cxl = false, bool log_trace = false);
       ~DRAMsimCntlr();
       void start();
       void stop();

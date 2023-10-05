@@ -9,7 +9,7 @@
    extern Lock iolock;
 #include "core_manager.h"
 #define MYTRACE(...)                                    \
-{ if (status_ == DRAMSIM_RUNNING){                      \
+{ if (log_trace && status_ == DRAMSIM_RUNNING){                      \
     ScopedLock l(iolock);                               \
     fflush(f_trace);                                    \
     fprintf(f_trace, __VA_ARGS__);                      \
@@ -20,12 +20,13 @@
 #define MYTRACE(...) {}
 #endif
 
-DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, bool is_cxl):
+DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, bool is_cxl, bool _log_trace):
    epoch_size(is_cxl ? Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dramsim/epoch") : Sim()->getCfg()->getInt("perf_model/dram/dramsim/epoch")),
    dram_period(is_cxl ? ComponentPeriod::fromFreqHz(Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dramsim/frequency") * 1000000) 
    : ComponentPeriod::fromFreqHz(Sim()->getCfg()->getFloat("perf_model/dram/dramsim/frequency") * 1000000)), // MHz to Hz
    ch_id(_ch_id),
    dram_cntlr_id(_dram_cntlr_id),
+   log_trace(_log_trace),
    status_(DRAMSIM_IDEL),
    mem_system_(NULL),
    clk_(0),
@@ -46,8 +47,9 @@ DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, bool is_cxl
        config, output_dir,
        std::bind(&DRAMsimCntlr::ReadCallBack, this, std::placeholders::_1),
        std::bind(&DRAMsimCntlr::WriteCallBack, this, std::placeholders::_1));
-
+   
 #ifdef MYTRACE_ENABLED
+   if (log_trace)
     f_trace = fopen(("dramsim_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".trace").c_str(), "w+");
 #endif
 }
@@ -56,6 +58,7 @@ DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, bool is_cxl
 DRAMsimCntlr::~DRAMsimCntlr(){
    delete mem_system_;
 #ifdef MYTRACE_ENABLED
+   if (log_trace)
     fclose(f_trace);
 #endif
 }
