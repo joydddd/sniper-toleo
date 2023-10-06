@@ -37,9 +37,7 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
    m_dramsim_channels(Sim()->getCfg()->getInt("perf_model/dram/dramsim/channles_per_contoller"))
    
 {
-   Sim()->getHooksManager()->registerHook(HookType::HOOK_ROI_BEGIN, DramPerfModelDramSim::ROIstartHOOK, (UInt64)this);
-   Sim()->getHooksManager()->registerHook(HookType::HOOK_ROI_END, DramPerfModelDramSim::ROIendHOOK, (UInt64)this);
-
+   Sim()->getHooksManager()->registerHook(HookType::HOOK_INSTRUMENT_MODE, DramPerfModelDramSim::Change_mode_HOOK, (UInt64)this);
    
    m_dram_access_cost = SubsecondTime::FS() * static_cast<uint64_t>(TimeConverter<float>::NStoFS(Sim()->getCfg()->getFloat("perf_model/dram/latency"))); // Operate in fs for higher precision before converting to uint64_t/SubsecondTime
 
@@ -136,8 +134,14 @@ DramPerfModelDramSim::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size, 
 
    return access_latency;
 }
+void DramPerfModelDramSim::dramsimAdvance(SubsecondTime barrier_time){
+   for (UInt32 ch_id = 0; ch_id < m_dramsim_channels; ch_id++){
+      m_dramsim[ch_id]->advance(barrier_time);
+   }
+}
 
 void DramPerfModelDramSim::dramsimStart(){
+   Sim()->getHooksManager()->registerHook(HookType::HOOK_PERIODIC, DramPerfModelDramSim::Periodic_HOOK, (UInt64)this);
    for (UInt32 ch_id = 0; ch_id < m_dramsim_channels; ch_id++){
       m_dramsim[ch_id]->start();
    }

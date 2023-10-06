@@ -12,12 +12,13 @@ class DRAMsimCntlr{
    private:
     uint64_t epoch_size; // cycles in one epoch
     ComponentPeriod dram_period;
+    SubsecondTime epoch_period;// period of one epoch
     uint32_t ch_id, dram_cntlr_id;
 
     bool log_trace = false;
 
     enum DramSimStatus{
-     DRAMSIM_IDEL = 0,
+     DRAMSIM_NOT_STARTED = 0,
      DRAMSIM_AWAITING,
      DRAMSIM_RUNNING,
      DRAMSIM_DONE
@@ -39,6 +40,7 @@ class DRAMsimCntlr{
       ~DRAMsimCntlr();
       void start();
       void stop();
+      void advance(SubsecondTime t_barrier);
       void addTrans(SubsecondTime t_sniper, IntPtr addr, bool is_write);
 };
 

@@ -31,6 +31,7 @@ class DramPerfModelDramSim : public DramPerfModel {
 
       void dramsimStart();
       void dramsimEnd();
+      void dramsimAdvance(SubsecondTime barrier_time);
 
      public:
       DramPerfModelDramSim(core_id_t core_id, UInt32 cache_block_size);
@@ -39,15 +40,22 @@ class DramPerfModelDramSim : public DramPerfModel {
 
       SubsecondTime getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size, core_id_t requester, IntPtr address, DramCntlrInterface::access_t access_type, ShmemPerf *perf);
 
-      static SInt64 ROIstartHOOK(UInt64 object, UInt64 argument){
-         ((DramPerfModelDramSim*)object)->dramsimStart();
+      static SInt64 Periodic_HOOK(UInt64 object, UInt64 barrier_time){
+         subsecond_time_t t; t.m_time = barrier_time;
+         ((DramPerfModelDramSim*)object)->dramsimAdvance(SubsecondTime(t));
+         return 0;
+      }
+      
+      
+      static SInt64 Change_mode_HOOK(UInt64 object, UInt64 mode){
+         if (mode == InstMode::DETAILED){
+            ((DramPerfModelDramSim*)object)->dramsimStart();
+         } if (mode != InstMode::DETAILED){
+            ((DramPerfModelDramSim*)object)->dramsimEnd();
+         }
          return 0;
       }
 
-      static SInt64 ROIendHOOK(UInt64 object, UInt64 argument){
-         ((DramPerfModelDramSim*)object)->dramsimEnd();
-         return 0;
-      }
       friend class DRAMsimCntlr;
 };
 #endif /* __DRAM_PERF_MODEL_DRAMSIM_H__ */

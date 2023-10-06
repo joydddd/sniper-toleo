@@ -24,10 +24,11 @@ DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, bool is_cxl
    epoch_size(is_cxl ? Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dramsim/epoch") : Sim()->getCfg()->getInt("perf_model/dram/dramsim/epoch")),
    dram_period(is_cxl ? ComponentPeriod::fromFreqHz(Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dramsim/frequency") * 1000000) 
    : ComponentPeriod::fromFreqHz(Sim()->getCfg()->getFloat("perf_model/dram/dramsim/frequency") * 1000000)), // MHz to Hz
+   epoch_period(epoch_size * dram_period.getPeriod()),
    ch_id(_ch_id),
    dram_cntlr_id(_dram_cntlr_id),
    log_trace(_log_trace),
-   status_(DRAMSIM_IDEL),
+   status_(DRAMSIM_NOT_STARTED),
    mem_system_(NULL),
    clk_(0),
    t_start_(SubsecondTime::Zero()),
@@ -48,7 +49,13 @@ DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, bool is_cxl
        std::bind(&DRAMsimCntlr::ReadCallBack, this, std::placeholders::_1),
        std::bind(&DRAMsimCntlr::WriteCallBack, this, std::placeholders::_1));
    
+   // DEBUG:
+   fprintf(stderr, "epoch size %lu, epoch_period %lu, dram_period %lu\n",
+           epoch_size, epoch_period.getNS(), dram_period.getPeriod().getNS());
+
 #ifdef MYTRACE_ENABLED
+   //DEBUG:
+   log_trace = 1;
    if (log_trace)
     f_trace = fopen(("dramsim_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".trace").c_str(), "w+");
 #endif
@@ -67,12 +74,8 @@ void DRAMsimCntlr::runDRAMsim(uint64_t target_cycle){ // run DRAMsim until cycle
    // run DRAMsim until 
    auto it = pending_reqs_.begin();
    for (; clk_ < target_cycle; clk_++) {
-      if (it == pending_reqs_.end()) {
-         status_ = DRAMSIM_DONE;
-         return;
-      }
       mem_system_->ClockTick();
-      if (it->first <= clk_){ // req cycle <= current clk
+      if (it != pending_reqs_.end() && it->first <= clk_){ // req cycle <= current clk
          bool get_next = mem_system_->WillAcceptTransaction(it->second.addr, it->second.is_write);
          if (get_next) {
             // fprintf(stderr, "[DRAMSIM #%d] @0x%016lx send Req %ld [%ld]cycle \n", ch_id, it->second.addr,  it->first, clk_);
@@ -93,43 +96,50 @@ void DRAMsimCntlr::WriteCallBack(uint64_t addr) {
 }
 
 void DRAMsimCntlr::addTrans(SubsecondTime t_sniper, IntPtr addr, bool is_write){
-   if (status_ == DRAMSIM_IDEL || status_ == DRAMSIM_DONE){
+   if (status_ != DRAMSIM_RUNNING){ // do nothing if DRAMsim isn't running
       return;
    }
 
-   // set t_start_ if this is the first transaction
-   if (status_ == DRAMSIM_AWAITING){
-      LOG_ASSERT_ERROR(clk_ == 0, "clk_ %lu", clk_);
-      t_start_ = t_sniper > epoch_size * dram_period.getPeriod() ? t_sniper - epoch_size * dram_period.getPeriod() : SubsecondTime::Zero(); 
-      // t_start = first_req_time - epoch_size
-      status_ = DRAMSIM_RUNNING;
-      fprintf(stderr, "[DRAMSIM #%d] First Req at %ld ns, t0 = %ld ns clk %lu\n", ch_id, t_sniper.getNS(), t_start_.getNS(), clk_);
-   }
-   // DRAMSIM_RUNNING
-   LOG_ASSERT_ERROR(t_sniper > t_start_, "t_sniper %ld, t_start %ld", t_sniper.getNS(), t_start_.getNS());
+   LOG_ASSERT_ERROR(t_sniper > t_start_, "DRAM Request too early: t_sniper %ld, t_start %ld", t_sniper.getNS(), t_start_.getNS());
    uint64_t req_clk =  (t_sniper - t_start_).getInternalDataForced() / dram_period.getPeriod().getInternalDataForced();
+   LOG_ASSERT_ERROR(req_clk > clk_, "DRAM Request outside of Epoch: req_clk %ld, clk_ %ld", req_clk, clk_);
    t_latest_req_ = t_sniper > t_latest_req_ ? t_sniper : t_latest_req_;
    clk_latest_req_ = req_clk > clk_latest_req_ ? req_clk : clk_latest_req_;
 //    fprintf(stderr, "[DRAMSIM #%d] @0x%016lx Add Req %ld cycle t %ld \n", ch_id, addr, req_clk, t_sniper.getNS());
    dramsim3::Transaction trans(addr, is_write);
    pending_reqs_.insert(std::pair<uint64_t, dramsim3::Transaction>(req_clk, trans));
-   
-   runDRAMsim(clk_latest_req_ - epoch_size);
+
+   runDRAMsim(clk_latest_req_ > epoch_size ? clk_latest_req_ - epoch_size : 0);
+}
+
+void DRAMsimCntlr::advance(SubsecondTime t_barrier){
+   if (status_ == DRAMSIM_NOT_STARTED || status_ == DRAMSIM_DONE) return; // Do nothing
+   if (status_ == DRAMSIM_AWAITING){ // set t_start
+      LOG_ASSERT_ERROR(clk_ == 0, "clk_ %lu", clk_);
+      t_start_ = t_barrier;
+      status_ = DRAMSIM_RUNNING;
+      fprintf(stderr, "[DRAMSIM #%d] First Barrier at %ld ns, clk %lu\n", ch_id, t_barrier.getNS(), clk_);
+   }
+   if (status_ == DRAMSIM_RUNNING){ // run DRAMsim
+      uint64_t barrier_clk =  (t_barrier - t_start_).getInternalDataForced() / dram_period.getPeriod().getInternalDataForced();
+      runDRAMsim(barrier_clk);
+   }
 }
 
 void DRAMsimCntlr::start(){
-   LOG_ASSERT_ERROR(status_ == DRAMSIM_IDEL, "DRAMSim3 has already been started %d", status_);
+   LOG_ASSERT_ERROR(status_ == DRAMSIM_NOT_STARTED, "DRAMSim3 has already been started %d", status_);
    clk_ = 0;
    status_ = DRAMSIM_AWAITING;
-//    fprintf(stderr, "[DRAMSIM #%d] Start DRAMsim3 at %ld ns, clk %lu\n", ch_id, t_start_.getNS(), clk_);
+   fprintf(stderr, "[DRAMSIM #%d] Start DRAMsim3\n");
 }
 
 void DRAMsimCntlr::stop(){
-   LOG_ASSERT_ERROR(status_ == DRAMSIM_RUNNING, "DRAMSim3 is not running %d", status_);
+   if (status_ == DRAMSIM_NOT_STARTED) return ; // do nothing
    // Finish pending dram requests. 
-   while(status_ != DRAMSIM_DONE){
+   while(pending_reqs_.size() > 0){
       runDRAMsim(clk_ + epoch_size);
    }
+   status_ = DRAMSIM_DONE;
    fprintf(stderr, "[DRAMSIM #%d] Finish DRAMsim3. Latest Request %ld ns @cycel %ld, clk %lu\n", ch_id, t_latest_req_.getNS(), clk_latest_req_, clk_);
    mem_system_->PrintStats();
 }
