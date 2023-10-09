@@ -57,7 +57,7 @@ CXLPerfModelDramSim::CXLPerfModelDramSim(cxl_id_t cxl_id, UInt64 transaction_siz
     /* Intialize DRAMsim3 */
     m_dramsim = (DRAMsimCntlr**)malloc(sizeof(DRAMsimCntlr*) * m_dramsim_channels);
    for (UInt32 ch_id = 0; ch_id < m_dramsim_channels; ch_id++){
-      m_dramsim[ch_id] = new DRAMsimCntlr(cxl_id, ch_id, true);
+      m_dramsim[ch_id] = new DRAMsimCntlr(cxl_id, ch_id, m_ddr_access_cost, true);
    }
 
 #ifdef MYTRACE_ENABLED

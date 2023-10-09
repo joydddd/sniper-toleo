@@ -11,13 +11,11 @@
 
 class DramPerfModelDramSim : public DramPerfModel {
    private:
-      QueueModel* m_queue_model;
       SubsecondTime m_dram_access_cost;
-      ComponentBandwidth m_dram_bandwidth;
       UInt64 m_cache_block_size;
 
-      SubsecondTime m_total_queueing_delay;
       SubsecondTime m_total_access_latency;
+      SubsecondTime m_total_read_latency;
 
       // DRAMsim3
       DRAMsimCntlr** m_dramsim;
@@ -29,7 +27,7 @@ class DramPerfModelDramSim : public DramPerfModel {
       void dramsimReadCallBack(uint64_t addr);
       void dramsimWriteCallBack(uint64_t addr);
 
-      void dramsimStart();
+      void dramsimStart(InstMode::inst_mode_t sim_status);
       void dramsimEnd();
       void dramsimAdvance(SubsecondTime barrier_time);
 
@@ -48,9 +46,9 @@ class DramPerfModelDramSim : public DramPerfModel {
       
       
       static SInt64 Change_mode_HOOK(UInt64 object, UInt64 mode){
-         if (mode == InstMode::DETAILED){
-            ((DramPerfModelDramSim*)object)->dramsimStart();
-         } if (mode != InstMode::DETAILED){
+         if (mode == InstMode::DETAILED || mode == InstMode::CACHE_ONLY){ // start when warmup region or ROI starts
+            ((DramPerfModelDramSim*)object)->dramsimStart((InstMode::inst_mode_t)mode);
+         } if (mode == InstMode::FAST_FORWARD){
             ((DramPerfModelDramSim*)object)->dramsimEnd();
          }
          return 0;

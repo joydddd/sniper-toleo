@@ -28,33 +28,25 @@
 DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
       UInt32 cache_block_size):
    DramPerfModel(core_id, cache_block_size),
-   m_queue_model(NULL),
-   m_dram_bandwidth(8 * Sim()->getCfg()->getFloat("perf_model/dram/per_controller_bandwidth")), // Convert bytes to bits
    m_cache_block_size(cache_block_size),
-   m_total_queueing_delay(SubsecondTime::Zero()),
    m_total_access_latency(SubsecondTime::Zero()),
+   m_total_read_latency(SubsecondTime::Zero()),
    m_dramsim(NULL),
    m_dramsim_channels(Sim()->getCfg()->getInt("perf_model/dram/dramsim/channles_per_contoller"))
    
 {
    Sim()->getHooksManager()->registerHook(HookType::HOOK_INSTRUMENT_MODE, DramPerfModelDramSim::Change_mode_HOOK, (UInt64)this);
    
-   m_dram_access_cost = SubsecondTime::FS() * static_cast<uint64_t>(TimeConverter<float>::NStoFS(Sim()->getCfg()->getFloat("perf_model/dram/latency"))); // Operate in fs for higher precision before converting to uint64_t/SubsecondTime
-
-   if (Sim()->getCfg()->getBool("perf_model/dram/queue_model/enabled"))
-   {
-      m_queue_model = QueueModel::create("dram-queue", core_id, Sim()->getCfg()->getString("perf_model/dram/queue_model/type"),
-                                         m_dram_bandwidth.getRoundedLatency(8 * cache_block_size)); // bytes to bits
-   }
+   m_dram_access_cost = SubsecondTime::FS() * static_cast<uint64_t>(TimeConverter<float>::NStoFS(Sim()->getCfg()->getFloat("perf_model/dram/default_latency"))); // Operate in fs for higher precision before converting to uint64_t/SubsecondTime
 
    /* Initilize DRAMsim3 simulator */
    m_dramsim = (DRAMsimCntlr**)malloc(sizeof(DRAMsimCntlr*) * m_dramsim_channels);
    for (UInt32 ch_id = 0; ch_id < m_dramsim_channels; ch_id++){
-      m_dramsim[ch_id] = new DRAMsimCntlr(core_id, ch_id);
+      m_dramsim[ch_id] = new DRAMsimCntlr(core_id, ch_id, m_dram_access_cost);
    }
 
    registerStatsMetric("dram", core_id, "total-access-latency", &m_total_access_latency);
-   registerStatsMetric("dram", core_id, "total-queueing-delay", &m_total_queueing_delay);
+   registerStatsMetric("dram", core_id, "total-read-latency", &m_total_read_latency);
 #ifdef MYTRACE_ENABLED
    std::ostringstream trace_filename;
    trace_filename << "dram_perf_" << m_core_id << ".trace";
@@ -65,12 +57,6 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
 
 DramPerfModelDramSim::~DramPerfModelDramSim()
 {
-   if (m_queue_model)
-   {
-     delete m_queue_model;
-      m_queue_model = NULL;
-   }
-
    if (m_dramsim)
    {
       for (UInt32 ch_id = 0; ch_id < m_dramsim_channels; ch_id++){
@@ -92,45 +78,32 @@ DramPerfModelDramSim::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size, 
       return SubsecondTime::Zero();
    }
 
-   SubsecondTime processing_time = m_dram_bandwidth.getRoundedLatency(8 * pkt_size); // bytes to bits
-
-   // Compute Queue Delay
-   SubsecondTime queue_delay;
-   if (m_queue_model)
-   {
-      queue_delay = m_queue_model->computeQueueDelay(pkt_time, processing_time, requester);
-   }
-   else
-   {
-      queue_delay = SubsecondTime::Zero();
-   }
-
-   SubsecondTime access_latency = queue_delay + processing_time + m_dram_access_cost;
-
-   uint32_t dramsim_ch_id = (address/m_cache_block_size) % m_dramsim_channels;
+   SubsecondTime dramsim_latency;
+   uint32_t dramsim_ch_id = (address / m_cache_block_size) % m_dramsim_channels;
    IntPtr ch_addr = (address/m_cache_block_size) / m_dramsim_channels * m_cache_block_size;
-   m_dramsim[dramsim_ch_id]->addTrans(pkt_time + queue_delay, ch_addr, access_type == DramCntlrInterface::WRITE);
+   dramsim_latency = m_dramsim[dramsim_ch_id]->addTrans(pkt_time, ch_addr, access_type == DramCntlrInterface::WRITE);
+
+   SubsecondTime access_latency = dramsim_latency;
 
    switch(access_type){
       case DramCntlrInterface::READ:
-         MYTRACE("R ==%s== @ %016lx", itostr(pkt_time + queue_delay + processing_time).c_str(), address);
+         MYTRACE("0x%016lx\tREAD\t%lu", address, dramsim_latency.getNS());
          break;
       case DramCntlrInterface::WRITE:
-         MYTRACE("W ==%s== @ %016lx", itostr(pkt_time + queue_delay + processing_time).c_str(), address);
+         MYTRACE("0x%016lx\tWRITE\t%lu", address, dramsim_latency.getNS());
          break;
       default:
          LOG_ASSERT_ERROR(false, "Unsupported DramCntlrInterface::access_t(%u)", access_type);
    }
    
    perf->updateTime(pkt_time);
-   perf->updateTime(pkt_time + queue_delay, ShmemPerf::DRAM_QUEUE);
-   perf->updateTime(pkt_time + queue_delay + processing_time, ShmemPerf::DRAM_BUS);
-   perf->updateTime(pkt_time + queue_delay + processing_time + m_dram_access_cost, ShmemPerf::DRAM_DEVICE);
+   perf->updateTime(pkt_time + dramsim_latency, ShmemPerf::DRAM_DEVICE);
 
-   // Update Memory Counters
+   // Update Memory Counters only for reads
    m_num_accesses ++;
    m_total_access_latency += access_latency;
-   m_total_queueing_delay += queue_delay;
+   if (access_type == DramCntlrInterface::READ)
+      m_total_read_latency += access_latency;
 
    return access_latency;
 }
@@ -140,10 +113,10 @@ void DramPerfModelDramSim::dramsimAdvance(SubsecondTime barrier_time){
    }
 }
 
-void DramPerfModelDramSim::dramsimStart(){
+void DramPerfModelDramSim::dramsimStart(InstMode::inst_mode_t sim_status){
    Sim()->getHooksManager()->registerHook(HookType::HOOK_PERIODIC, DramPerfModelDramSim::Periodic_HOOK, (UInt64)this);
    for (UInt32 ch_id = 0; ch_id < m_dramsim_channels; ch_id++){
-      m_dramsim[ch_id]->start();
+      m_dramsim[ch_id]->start(sim_status);
    }
 }
 

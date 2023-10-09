@@ -141,7 +141,9 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     ('  num dram accesses', 'dram.accesses', str),
     ('  average dram access latency (ns)', 'dram.avglatency', format_ns(2)),
   ]
-  
+  if 'dram.total-read-latency' in results:
+    results['dram.avgreadlat'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['dram.total-read-latency'], results['dram.reads']))
+    template.append(('  average dram read latency (ns)', 'dram.avgreadlat', format_ns(2)))
   if 'dram.data-reads' in results:
     results['dram.data-accesses'] = map(sum, zip(results['dram.data-reads'], results['dram.data-writes']))
     results['dram.mac-accesses'] = map(sum, zip(results['dram.mac-reads'], results['dram.mac-writes']))
@@ -152,7 +154,7 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     results['dram.avgqueuewrite'] = map(lambda (a,b): a/(b or 1), zip(results['dram.total-write-queueing-delay'], results['dram.writes']))
     template.append(('  average dram read queueing delay', 'dram.avgqueueread', format_ns(2)))
     template.append(('  average dram write queueing delay', 'dram.avgqueuewrite', format_ns(2)))
-  else:
+  elif 'dram.avgqueue' in results:
     results['dram.avgqueue'] = map(lambda (a,b): a/(b or 1), zip(results.get('dram.total-queueing-delay', [0]*ncores), results['dram.accesses']))
     template.append(('  average dram queueing delay', 'dram.avgqueue', format_ns(2)))
   if 'dram-queue.total-time-used' in results:

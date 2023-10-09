@@ -9,18 +9,27 @@
    extern Lock iolock;
 #include "core_manager.h"
 #define MYTRACE(...)                                    \
-{ if (log_trace && status_ == DRAMSIM_RUNNING){                      \
+{ if (log_trace && status_ == DRAMSIM_RUNNING && sim_status_ == SIM_ROI){                      \
     ScopedLock l(iolock);                               \
     fflush(f_trace);                                    \
     fprintf(f_trace, __VA_ARGS__);                      \
     fprintf(f_trace, "\n");                             \
     fflush(f_trace);                                    \
 }}
+#define CALLBACKTRACE(...)                              \
+{ if (log_trace && status_ == DRAMSIM_RUNNING && sim_status_ == SIM_ROI){         \
+    ScopedLock l(iolock);                               \
+    fflush(f_callback_trace);                                    \
+    fprintf(f_callback_trace, __VA_ARGS__);                      \
+    fprintf(f_callback_trace, "\n");                             \
+    fflush(f_callback_trace);                                    \
+}}
 #else
 #define MYTRACE(...) {}
+#define CALLBACKTRACE(...) {}
 #endif
 
-DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, bool is_cxl, bool _log_trace):
+DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, SubsecondTime default_latency, bool is_cxl, bool _log_trace):
    epoch_size(is_cxl ? Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dramsim/epoch") : Sim()->getCfg()->getInt("perf_model/dram/dramsim/epoch")),
    dram_period(is_cxl ? ComponentPeriod::fromFreqHz(Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dramsim/frequency") * 1000000) 
    : ComponentPeriod::fromFreqHz(Sim()->getCfg()->getFloat("perf_model/dram/dramsim/frequency") * 1000000)), // MHz to Hz
@@ -29,6 +38,7 @@ DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, bool is_cxl
    dram_cntlr_id(_dram_cntlr_id),
    log_trace(_log_trace),
    status_(DRAMSIM_NOT_STARTED),
+   sim_status_(SIM_NOT_STARTED),
    mem_system_(NULL),
    clk_(0),
    t_start_(SubsecondTime::Zero()),
@@ -48,16 +58,13 @@ DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, bool is_cxl
        config, output_dir,
        std::bind(&DRAMsimCntlr::ReadCallBack, this, std::placeholders::_1),
        std::bind(&DRAMsimCntlr::WriteCallBack, this, std::placeholders::_1));
-   
-   // DEBUG:
-   fprintf(stderr, "epoch size %lu, epoch_period %lu, dram_period %lu\n",
-           epoch_size, epoch_period.getNS(), dram_period.getPeriod().getNS());
+   read_lat_generator.add_latency(default_latency);
 
 #ifdef MYTRACE_ENABLED
-   //DEBUG:
-   log_trace = 1;
-   if (log_trace)
+   if (log_trace){
     f_trace = fopen(("dramsim_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".trace").c_str(), "w+");
+    f_callback_trace = fopen(("dramsim_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".callback.trace").c_str(), "w+");
+   }
 #endif
 }
 
@@ -81,6 +88,7 @@ void DRAMsimCntlr::runDRAMsim(uint64_t target_cycle){ // run DRAMsim until cycle
             // fprintf(stderr, "[DRAMSIM #%d] @0x%016lx send Req %ld [%ld]cycle \n", ch_id, it->second.addr,  it->first, clk_);
             mem_system_->AddTransaction(it->second.addr, it->second.is_write);
             MYTRACE("0x%lX\t%s\t%lu", it->second.addr, it->second.is_write ? "WRITE":"READ", it->first);
+            in_flight_reqs_.insert(std::make_pair(it->second.addr, clk_));
             it = pending_reqs_.erase(it);
          }
       }
@@ -88,19 +96,31 @@ void DRAMsimCntlr::runDRAMsim(uint64_t target_cycle){ // run DRAMsim until cycle
 }
 
 void DRAMsimCntlr::ReadCallBack(uint64_t addr){
-//    fprintf(stderr, "[DRAMSIM #%d] R callback @ %016lx clk %lu\n", ch_id, addr, clk_);
+   auto req_range = in_flight_reqs_.equal_range(addr);
+   auto req_it = req_range.first;
+   uint64_t req_clk = req_it->second;
+   in_flight_reqs_.erase(req_it);
+   CALLBACKTRACE("0x%lX\tREAD\t%lu\t%lu", addr, req_clk, clk_-req_clk);
+   total_read_lat += clk_ - req_clk;
+   num_of_reads++;
+   read_lat_generator.add_latency((clk_ - req_clk) * dram_period.getPeriod());
 }
 
 void DRAMsimCntlr::WriteCallBack(uint64_t addr) {
-//    fprintf(stderr, "[DRAMSIM #%d] W callback @ %016lx clk %lu\b", ch_id, addr, clk_);
+   auto req_range = in_flight_reqs_.equal_range(addr);
+   auto req_it = req_range.first;
+   uint64_t req_clk = req_it->second;
+   in_flight_reqs_.erase(req_it);
+   CALLBACKTRACE("0x%lX\tWRITE\t%lu\t%lu", addr, req_clk, clk_-req_clk);   
 }
 
-void DRAMsimCntlr::addTrans(SubsecondTime t_sniper, IntPtr addr, bool is_write){
+SubsecondTime DRAMsimCntlr::addTrans(SubsecondTime t_sniper, IntPtr addr, bool is_write){
    if (status_ != DRAMSIM_RUNNING){ // do nothing if DRAMsim isn't running
-      return;
+      return read_lat_generator.get_latency();
    }
 
-   LOG_ASSERT_ERROR(t_sniper > t_start_, "DRAM Request too early: t_sniper %ld, t_start %ld", t_sniper.getNS(), t_start_.getNS());
+   if (t_sniper < t_start_ && sim_status_ == SIM_WARMUP) return read_lat_generator.get_latency(); // skip if request is too early
+   LOG_ASSERT_ERROR(t_sniper >= t_start_, "DRAM Request too early: t_sniper %ld, t_start %ld", t_sniper.getNS(), t_start_.getNS());
    uint64_t req_clk =  (t_sniper - t_start_).getInternalDataForced() / dram_period.getPeriod().getInternalDataForced();
    LOG_ASSERT_ERROR(req_clk > clk_, "DRAM Request outside of Epoch: req_clk %ld, clk_ %ld", req_clk, clk_);
    t_latest_req_ = t_sniper > t_latest_req_ ? t_sniper : t_latest_req_;
@@ -109,7 +129,9 @@ void DRAMsimCntlr::addTrans(SubsecondTime t_sniper, IntPtr addr, bool is_write){
    dramsim3::Transaction trans(addr, is_write);
    pending_reqs_.insert(std::pair<uint64_t, dramsim3::Transaction>(req_clk, trans));
 
-   runDRAMsim(clk_latest_req_ > epoch_size ? clk_latest_req_ - epoch_size : 0);
+   // runDRAMsim(clk_latest_req_ > epoch_size ? clk_latest_req_ - epoch_size : 0);
+
+   return read_lat_generator.get_latency();
 }
 
 void DRAMsimCntlr::advance(SubsecondTime t_barrier){
@@ -122,15 +144,24 @@ void DRAMsimCntlr::advance(SubsecondTime t_barrier){
    }
    if (status_ == DRAMSIM_RUNNING){ // run DRAMsim
       uint64_t barrier_clk =  (t_barrier - t_start_).getInternalDataForced() / dram_period.getPeriod().getInternalDataForced();
+      read_lat_generator.newEpoch();
       runDRAMsim(barrier_clk);
+      // fprintf(stderr, "[DRAMSIM #%d] Barrier at %ld ns, clk %lu\n", ch_id, t_barrier.getNS(), barrier_clk);
    }
 }
 
-void DRAMsimCntlr::start(){
-   LOG_ASSERT_ERROR(status_ == DRAMSIM_NOT_STARTED, "DRAMSim3 has already been started %d", status_);
-   clk_ = 0;
-   status_ = DRAMSIM_AWAITING;
-   fprintf(stderr, "[DRAMSIM #%d] Start DRAMsim3\n");
+void DRAMsimCntlr::start(InstMode::inst_mode_t sim_status){
+   LOG_ASSERT_ERROR(status_ != DRAMSIM_DONE, "DRAMSim3 has already fninshed running");
+   if (status_ != DRAMSIM_NOT_STARTED){
+      LOG_ASSERT_ERROR(sim_status_ == SIM_WARMUP, "DRAMsim3 did not enter warmup mode");
+      sim_status_ = SIM_ROI;
+      fprintf(stderr, "[DRAMSIM #%d] Enter ROI %lu\n", ch_id, clk_);
+   } else {
+      fprintf(stderr, "[DRAMSIM #%d] Start DRAMsim3\n", ch_id);
+      clk_ = 0;
+      status_ = DRAMSIM_AWAITING;
+      sim_status_ = sim_status == InstMode::DETAILED ? SIM_ROI : SIM_WARMUP;
+   }
 }
 
 void DRAMsimCntlr::stop(){
@@ -141,5 +172,36 @@ void DRAMsimCntlr::stop(){
    }
    status_ = DRAMSIM_DONE;
    fprintf(stderr, "[DRAMSIM #%d] Finish DRAMsim3. Latest Request %ld ns @cycel %ld, clk %lu\n", ch_id, t_latest_req_.getNS(), clk_latest_req_, clk_);
+   fprintf(stderr, "[DRAMSIM #%d] avg latency %f \n", ch_id, (float)total_read_lat / num_of_reads);
    mem_system_->PrintStats();
+}
+
+
+DRAMsimCntlr::DRAMsimLatencyGenerator::DRAMsimLatencyGenerator(){
+   std::srand(0);
+}
+
+void DRAMsimCntlr::DRAMsimLatencyGenerator::newEpoch(){
+   new_epoch = true;
+}
+
+void DRAMsimCntlr::DRAMsimLatencyGenerator::add_latency(SubsecondTime latency){
+   if (new_epoch){
+      read_latencies.clear();
+      new_epoch = false;
+   }
+   read_latencies.push_back(latency);
+}
+
+SubsecondTime DRAMsimCntlr::DRAMsimLatencyGenerator::get_latency(){
+   int rand_pos = std::rand() % read_latencies.size();
+   // fprintf(stderr, "latency %lu\n", read_latencies[rand_pos].getNS());
+   return read_latencies[rand_pos];
+}
+
+void DRAMsimCntlr::DRAMsimLatencyGenerator::print_latencies(FILE* file){
+   // for (auto it = read_latencies.begin(); it != read_latencies.end(); it++){
+   //    fprintf(file, "%lu\t", it->getNS());
+   // }
+   // fprintf(file, "\n");
 }
