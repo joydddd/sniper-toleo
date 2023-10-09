@@ -160,7 +160,8 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
   if 'dram-queue.total-time-used' in results:
     results['dram.bandwidth'] = map(lambda a: float(100)*a/time0 if time0 else float('inf'), results['dram-queue.total-time-used'])
     template.append(('  average dram bandwidth utilization', 'dram.bandwidth', lambda v: '%.2f%%' % v))
-  
+  results['dram.bandwidth'] = map(lambda a: float(64*a)/(time0/1e6) if time0 else float('inf'), results['dram.accesses'])
+  template.append(('  average dram bandwidth (GB/s)', 'dram.bandwidth', lambda v: '%.2f' % v))
   # CXL access Summary
   if 'cxl.reads' in results:
     results['cxl.accesses'] = map(sum, zip(results['cxl.reads'], results['cxl.writes']))
