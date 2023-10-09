@@ -122,7 +122,7 @@ SubsecondTime DRAMsimCntlr::addTrans(SubsecondTime t_sniper, IntPtr addr, bool i
    if (t_sniper < t_start_ && sim_status_ == SIM_WARMUP) return read_lat_generator.get_latency(); // skip if request is too early
    LOG_ASSERT_ERROR(t_sniper >= t_start_, "DRAM Request too early: t_sniper %ld, t_start %ld", t_sniper.getNS(), t_start_.getNS());
    uint64_t req_clk =  (t_sniper - t_start_).getInternalDataForced() / dram_period.getPeriod().getInternalDataForced();
-   LOG_ASSERT_ERROR(req_clk > clk_, "DRAM Request outside of Epoch: req_clk %ld, clk_ %ld", req_clk, clk_);
+   LOG_ASSERT_ERROR(req_clk >= clk_, "DRAM Request outside of Epoch: req_clk %ld, clk_ %ld", req_clk, clk_);
    t_latest_req_ = t_sniper > t_latest_req_ ? t_sniper : t_latest_req_;
    clk_latest_req_ = req_clk > clk_latest_req_ ? req_clk : clk_latest_req_;
 //    fprintf(stderr, "[DRAMSIM #%d] @0x%016lx Add Req %ld cycle t %ld \n", ch_id, addr, req_clk, t_sniper.getNS());
@@ -167,25 +167,26 @@ void DRAMsimCntlr::start(InstMode::inst_mode_t sim_status){
 void DRAMsimCntlr::stop(){
    if (status_ == DRAMSIM_NOT_STARTED) return ; // do nothing
    // Finish pending dram requests. 
-   while(pending_reqs_.size() > 0){
+   while(in_flight_reqs_.size() > 0){
       runDRAMsim(clk_ + epoch_size);
    }
    status_ = DRAMSIM_DONE;
    fprintf(stderr, "[DRAMSIM #%d] Finish DRAMsim3. Latest Request %ld ns @cycel %ld, clk %lu\n", ch_id, t_latest_req_.getNS(), clk_latest_req_, clk_);
-   fprintf(stderr, "[DRAMSIM #%d] avg latency %f \n", ch_id, (float)total_read_lat / num_of_reads);
+   fprintf(stderr, "[DRAMSIM #%d] avg DRAMsim3 latency %f clk \n", ch_id, (float)total_read_lat / num_of_reads);
+   read_lat_generator.print_stats(stderr);
    mem_system_->PrintStats();
 }
 
 
-DRAMsimCntlr::DRAMsimLatencyGenerator::DRAMsimLatencyGenerator(){
+DRAMsimCntlr::LatencyGenerator::LatencyGenerator(){
    std::srand(0);
 }
 
-void DRAMsimCntlr::DRAMsimLatencyGenerator::newEpoch(){
+void DRAMsimCntlr::LatencyGenerator::newEpoch(){
    new_epoch = true;
 }
 
-void DRAMsimCntlr::DRAMsimLatencyGenerator::add_latency(SubsecondTime latency){
+void DRAMsimCntlr::LatencyGenerator::add_latency(SubsecondTime latency){
    if (new_epoch){
       read_latencies.clear();
       new_epoch = false;
@@ -193,15 +194,21 @@ void DRAMsimCntlr::DRAMsimLatencyGenerator::add_latency(SubsecondTime latency){
    read_latencies.push_back(latency);
 }
 
-SubsecondTime DRAMsimCntlr::DRAMsimLatencyGenerator::get_latency(){
+SubsecondTime DRAMsimCntlr::LatencyGenerator::get_latency(){
    int rand_pos = std::rand() % read_latencies.size();
    // fprintf(stderr, "latency %lu\n", read_latencies[rand_pos].getNS());
+   total_lat += read_latencies[rand_pos];
+   ++num_access;
    return read_latencies[rand_pos];
 }
 
-void DRAMsimCntlr::DRAMsimLatencyGenerator::print_latencies(FILE* file){
+void DRAMsimCntlr::LatencyGenerator::print_latencies(FILE* file){
    // for (auto it = read_latencies.begin(); it != read_latencies.end(); it++){
    //    fprintf(file, "%lu\t", it->getNS());
    // }
    // fprintf(file, "\n");
+}
+
+void DRAMsimCntlr::LatencyGenerator::print_stats(FILE* file){
+   fprintf(file, "avg simluation latency %lu ns\n", (total_lat / num_access).getNS());
 }

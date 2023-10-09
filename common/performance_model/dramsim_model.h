@@ -45,15 +45,18 @@ class DRAMsimCntlr {
     FILE* f_callback_trace;
 
     
-   class DRAMsimLatencyGenerator{
+   class LatencyGenerator{
       private:
       std::vector<SubsecondTime> read_latencies;
       bool new_epoch = false;
+      SubsecondTime total_lat = SubsecondTime::Zero();
+      uint64_t num_access = 0;
       public:
-      DRAMsimLatencyGenerator();
+      LatencyGenerator();
       void newEpoch();
       void add_latency(SubsecondTime latency);
       void print_latencies(FILE* file);
+      void print_stats(FILE* file);
       SubsecondTime get_latency();
    }read_lat_generator;
 
