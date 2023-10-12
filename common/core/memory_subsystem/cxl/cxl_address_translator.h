@@ -50,7 +50,7 @@ class CXLAddressTranslator
       UInt64* m_num_allocated_pages;
       std::vector<core_id_t> m_cxl_cntlr_core_list;
 
-      std::vector<float> m_memory_portion;
+      std::vector<float> m_page_distribution;
 
       IntPtr allocatePage(IntPtr vpn); // return physical page number
       IntPtr getPPN(IntPtr address);
