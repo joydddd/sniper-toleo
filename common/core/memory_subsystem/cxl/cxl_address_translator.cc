@@ -10,7 +10,6 @@
 
 #define MAX_PAGE_NUM_BITS 56
 
-
 // DEBUG:
 #if 0
 #  define MYLOG_ENABLED

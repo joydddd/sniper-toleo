@@ -154,12 +154,12 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     results['dram.avgqueuewrite'] = map(lambda (a,b): a/(b or 1), zip(results['dram.total-write-queueing-delay'], results['dram.writes']))
     template.append(('  average dram read queueing delay', 'dram.avgqueueread', format_ns(2)))
     template.append(('  average dram write queueing delay', 'dram.avgqueuewrite', format_ns(2)))
-  elif 'dram.avgqueue' in results:
+  elif 'dram.total-queueing-delay' in results:
     results['dram.avgqueue'] = map(lambda (a,b): a/(b or 1), zip(results.get('dram.total-queueing-delay', [0]*ncores), results['dram.accesses']))
     template.append(('  average dram queueing delay', 'dram.avgqueue', format_ns(2)))
   if 'dram-queue.total-time-used' in results:
-    results['dram.bandwidth'] = map(lambda a: float(100)*a/time0 if time0 else float('inf'), results['dram-queue.total-time-used'])
-    template.append(('  average dram bandwidth utilization', 'dram.bandwidth', lambda v: '%.2f%%' % v))
+    results['dram.bandwidth_util'] = map(lambda a: float(100)*a/time0 if time0 else float('inf'), results['dram-queue.total-time-used'])
+    template.append(('  average dram bandwidth utilization', 'dram.bandwidth_util', lambda v: '%.2f%%' % v))
   results['dram.bandwidth'] = map(lambda a: float(64*a)/(time0/1e6) if time0 else float('inf'), results['dram.accesses'])
   template.append(('  average dram bandwidth (GB/s)', 'dram.bandwidth', lambda v: '%.2f' % v))
   # CXL access Summary
@@ -185,8 +185,26 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
       results['cxl.avgqueue'] = map(lambda (a,b): a/(b or 1), zip(results.get('cxl.total-queueing-delay', [0]*ncores), results['cxl.accesses']))
       template.append(('  average cxl queueing delay', 'cxl.avgqueue', format_ns(2)))
     if 'cxl-queue.total-time-used' in results:
-      results['cxl.bandwidth'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['cxl-queue.total-time-used'])
-      template.append(('  average cxl bandwidth utilization', 'cxl.bandwidth', lambda v: '%.2f%%' % v))
+      results['cxl.bandwidth_util'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['cxl-queue.total-time-used'])
+      template.append(('  average cxl bandwidth utilization', 'cxl.bandwidth_util', lambda v: '%.2f%%' % v))
+    results['cxl.bandwidth'] = map(lambda a: float(64*a)/(time0/1e6) if time0 else float('inf'), results['cxl.accesses'])
+    template.append(('  average cxl bandwidth (GB/s)', 'cxl.bandwidth', lambda v: '%.2f' % v))
+  
+    # Dram perfomance summary on CXL expander
+    results['cxl-dram.avglatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['cxl-dram.total-access-latency'], results['cxl.accesses']))
+    template += [
+      ('CXL DRAM summary', '', ''),
+      ('  average dram access latency(CXL expander) (ns)', 'cxl-dram.avglatency', format_ns(2)),
+    ]
+    if 'cxl-dram.total-queueing-delay' in results:
+      results['cxl-dram.avgqueue'] = map(lambda (a,b): a/(b or 1), zip(results['cxl-dram.total-queueing-delay'], results['cxl.accesses']))
+      template.append(('  average cxl dram queueing delay', 'cxl-dram.avgqueue', format_ns(2)))
+    if 'cxl-dram-queue.total-time-used' in results:
+      results['cxl-dram.bandwidth_util'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['cxl-dram-queue.total-time-used'])
+      template.append(('  average cxl dram bandwidth utilization', 'cxl-dram.bandwidth_util', lambda v: '%.2f%%' % v))
+    results['cxl-dram.bandwidth'] = map(lambda a: float(64*a)/(time0/1e6) if time0 else float('inf'), results['cxl.accesses'])
+    template.append(('  average cxl dram bandwidth (GB/s)', 'cxl-dram.bandwidth', lambda v: '%.2f' % v))
+    
   
   if 'vn-vault.reads' in results:
     results['vn-vault.accesses'] = map(sum, zip(results['vn-vault.reads'], results['vn-vault.updates']))

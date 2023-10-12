@@ -40,6 +40,8 @@ CXLCntlr::CXLCntlr(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf
              /* Create CXL perf model */;
              m_cxl_perf_models[cxl_id] = CXLPerfModel::createCXLPerfModel(cxl_id, cache_block_size * 8); 
              /* convert from bytes to bits*/
+             registerStatsMetric("cxl", cxl_id, "reads", &m_reads[cxl_id]);
+             registerStatsMetric("cxl", cxl_id, "writes", &m_writes[cxl_id]);
          }
      }
 

@@ -19,8 +19,8 @@ class ShmemPerf;
 // It sort of increases the queueing delay to a huge value if
 // the arrival times of adjacent packets are spread over a large
 // simulated time period
-class DramPerfModel
-{
+enum DramType { SYSTEM_DRAM = 0, CXL_VN,  CXL_MEMORY, NUM_OF_DRAM_TYPES };
+class DramPerfModel {
    protected:
       bool m_enabled;
       core_id_t m_core_id;
@@ -28,7 +28,7 @@ class DramPerfModel
       FILE* f_trace;
 
    public:
-      static DramPerfModel* createDramPerfModel(core_id_t core_id, UInt32 cache_block_size);
+      static DramPerfModel* createDramPerfModel(core_id_t core_id, UInt32 cache_block_size, DramType dram_type = SYSTEM_DRAM);
 
       DramPerfModel(core_id_t core_id, UInt64 cache_block_size) : m_enabled(false), m_core_id(core_id), m_num_accesses(0) {}
       virtual ~DramPerfModel() {}

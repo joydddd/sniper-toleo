@@ -26,13 +26,15 @@
 #endif
 
 DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
-      UInt32 cache_block_size):
+      UInt32 cache_block_size, DramType dram_type):
    DramPerfModel(core_id, cache_block_size),
    m_cache_block_size(cache_block_size),
    m_total_access_latency(SubsecondTime::Zero()),
    m_total_read_latency(SubsecondTime::Zero()),
    m_dramsim(NULL),
-   m_dramsim_channels(Sim()->getCfg()->getInt("perf_model/dram/dramsim/channles_per_contoller"))
+   m_dramsim_channels(dram_type == DramType::SYSTEM_DRAM ? 
+                     Sim()->getCfg()->getInt("perf_model/dram/dramsim/channles_per_contoller") :
+                     Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_" + itostr((unsigned int)core_id) + "/dram/dramsim/channles_per_contoller"))
    
 {
    Sim()->getHooksManager()->registerHook(HookType::HOOK_INSTRUMENT_MODE, DramPerfModelDramSim::Change_mode_HOOK, (UInt64)this);
@@ -45,11 +47,22 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
       m_dramsim[ch_id] = new DRAMsimCntlr(core_id, ch_id, m_dram_access_cost);
    }
 
-   registerStatsMetric("dram", core_id, "total-access-latency", &m_total_access_latency);
-   registerStatsMetric("dram", core_id, "total-read-latency", &m_total_read_latency);
+   if (dram_type == DramType::SYSTEM_DRAM) {
+      registerStatsMetric("dram", core_id, "total-access-latency", &m_total_access_latency);
+      registerStatsMetric("dram", core_id, "total-read-latenc", &m_total_read_latency);
+   } else if (dram_type == DramType::CXL_MEMORY){
+      registerStatsMetric("cxl-dram", core_id, "total-access-latency", &m_total_access_latency);
+      registerStatsMetric("cxl-dram", core_id, "total-read-latenc", &m_total_read_latency);
+   } else {
+      std::cerr << "Unsupported dram type " << dram_type << std::endl;
+   }
 #ifdef MYTRACE_ENABLED
    std::ostringstream trace_filename;
-   trace_filename << "dram_perf_" << m_core_id << ".trace";
+   if (dram_type == DramType::SYSTEM_DRAM){
+      trace_filename << "dram_perf_" << m_core_id << ".trace";
+   } else if (dram_type == DramType::CXL_MEMORY){
+      trace_filename << "cxl_dram_perf_" << m_core_id << ".trace";
+   }
    f_trace = fopen(trace_filename.str().c_str(), "w+");
     std::cerr << "Create DRAM perf trace " << trace_filename.str().c_str() << std::endl;
 #endif // MYTRACE_ENABLED
