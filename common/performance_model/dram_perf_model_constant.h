@@ -18,8 +18,7 @@ class DramPerfModelConstant : public DramPerfModel
       SubsecondTime m_total_access_latency;
 
    public:
-      DramPerfModelConstant(core_id_t core_id,
-            UInt32 cache_block_size);
+      DramPerfModelConstant(core_id_t core_id, UInt32 cache_block_size, DramType dram_type = DramType::SYSTEM_DRAM);
 
       ~DramPerfModelConstant();
 

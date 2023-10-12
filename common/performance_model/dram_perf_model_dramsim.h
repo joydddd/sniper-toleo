@@ -32,7 +32,7 @@ class DramPerfModelDramSim : public DramPerfModel {
       void dramsimAdvance(SubsecondTime barrier_time);
 
      public:
-      DramPerfModelDramSim(core_id_t core_id, UInt32 cache_block_size);
+      DramPerfModelDramSim(core_id_t core_id, UInt32 cache_block_size, DramType dram_type = DramType::SYSTEM_DRAM);
 
       ~DramPerfModelDramSim();
 

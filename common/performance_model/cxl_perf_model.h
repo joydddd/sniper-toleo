@@ -27,8 +27,8 @@ class CXLPerfModel
           SubsecondTime pkt_time, UInt64 pkt_size, core_id_t requester,
           IntPtr address, CXLCntlrInterface::access_t access_type,
           ShmemPerf* perf) = 0;
-      void enable() { m_enabled = true; }
-      void disable() { m_enabled = false; }
+      virtual void enable() { m_enabled = true; }
+      virtual void disable() { m_enabled = false; }
 
       UInt64 getTotalAccesses() { return m_num_accesses; }
 };

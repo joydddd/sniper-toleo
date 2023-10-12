@@ -10,7 +10,6 @@
 
 #define MAX_PAGE_NUM_BITS 56
 
-
 // DEBUG:
 #if 0
 #  define MYLOG_ENABLED
@@ -51,20 +50,35 @@ CXLAddressTranslator::CXLAddressTranslator(
    LOG_ASSERT_ERROR((1 << m_page_offset) == (SInt32)m_page_size,
                   "Page Size %u is not a 2^N", m_page_size);
 
-   UInt64 total_memory_size = m_dram_size;
-   for (auto it = m_cxl_dev_size.begin(); it != m_cxl_dev_size.end();
-      ++it) {
-      total_memory_size += *it;
-   }
-
-   m_memory_portion.resize(m_num_cxl_devs + 1);
+   m_page_distribution.resize(m_num_cxl_devs + 1);
    float accumuated_portion = 0;
-   for (unsigned int i = 0; i < m_num_cxl_devs; i++) {
-      m_memory_portion[i] = (float)m_cxl_dev_size[i] / total_memory_size + accumuated_portion;
-      accumuated_portion = m_memory_portion[i] ;
-   }
-   m_memory_portion[m_num_cxl_devs] = 1.0;
 
+   // Calculate page distribution w.r.t size
+   // UInt64 total_memory_size = m_dram_size;
+   // for (auto it = m_cxl_dev_size.begin(); it != m_cxl_dev_size.end();
+   //    ++it) {
+   //    total_memory_size += *it;
+   // }
+   // for (unsigned int i = 0; i < m_num_cxl_devs; i++) {
+   //    m_page_distribution[i] = (float)m_cxl_dev_size[i] / total_memory_size + accumuated_portion;
+   //    accumuated_portion = m_page_distribution[i] ;
+   // }
+
+   // Calculate page distribution w.r.t bandwidth
+   float dram_bandwidth =
+       Sim()->getCfg()->getFloat("perf_model/dram/per_controller_bandwidth") *
+       Sim()->getCfg()->getInt("perf_model/dram/num_controllers");
+   std::vector<float> cxl_bandwidth(m_num_cxl_devs);
+   float mem_total_bw = dram_bandwidth;
+   for (unsigned int i = 0; i < m_num_cxl_devs; i++){
+      cxl_bandwidth[i] = Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_"+ itostr((unsigned int)i) +"/bandwidth");
+      mem_total_bw += cxl_bandwidth[i];
+   }
+   for (unsigned int i = 0; i < m_num_cxl_devs; i++) {
+      m_page_distribution[i] = cxl_bandwidth[i] / mem_total_bw + accumuated_portion;
+      accumuated_portion = m_page_distribution[i] ;
+   }
+   m_page_distribution[m_num_cxl_devs] = 1.0;
 
    f_page_table = fopen("page_table.log", "w+");
 
@@ -183,11 +197,11 @@ IntPtr CXLAddressTranslator::getPPN(IntPtr address)
 //    return ppn;
 // }
 
-/* Random Allocation w.r.t to size. */
+/* Random Allocation w.r.t to m_page_distribution. */
 IntPtr CXLAddressTranslator::allocatePage(IntPtr vpn){
    float rand_loc = (float)rand() / (float)RAND_MAX;
    for (m_last_allocated = 0; m_last_allocated < m_num_cxl_devs + 1; m_last_allocated++){
-      if (m_memory_portion[m_last_allocated] >= rand_loc){
+      if (m_page_distribution[m_last_allocated] >= rand_loc){
          break;
       }
    }
@@ -205,6 +219,7 @@ IntPtr CXLAddressTranslator::allocatePage(IntPtr vpn){
 #endif // MYLOG_ENABLED
    return ppn;
 }
+
 
 void CXLAddressTranslator::printPageUsage(){
    fprintf(f_page_table,"Page Usage:\n");
