@@ -154,13 +154,13 @@ namespace ParametricDramDirectoryMSI
          Lock m_smt_lock; //< Only used in L1 cache, to protect against concurrent access from sibling SMT threads
          CacheCntlrList m_prev_cache_cntlrs;
          Prefetcher* m_prefetcher;
-         DramCntlrInterface* m_dram_cntlr; // TODO: decouple froom CacheMasterCntlr
-         ContentionModel* m_dram_outstanding_writebacks; // TODO: decouple from CacheMasterCntlr
+         DramCntlrInterface* m_dram_cntlr; // direct DRAM access dram cntlr
+         ContentionModel* m_dram_outstanding_writebacks; 
 
          Mshr mshr;
          ContentionModel m_l1_mshr;
          ContentionModel m_next_level_read_bandwidth;
-         CacheDirectoryWaiterMap m_directory_waiters; // TODO: decouple from CacheMasterCntlr
+         CacheDirectoryWaiterMap m_directory_waiters; 
          IntPtr m_evicting_address;
          Byte* m_evicting_buf;
 

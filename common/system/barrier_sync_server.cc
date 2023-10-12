@@ -15,6 +15,11 @@
 
 #include <algorithm>
 
+// #define LOG_PRINT(...){           \
+//    fprintf(stderr, __VA_ARGS__); \
+//    fprintf(stderr, "\n");           \
+// }
+
 BarrierSyncServer::BarrierSyncServer()
    : m_local_clock_list(Sim()->getConfig()->getApplicationCores(), SubsecondTime::Zero())
    , m_barrier_acquire_list(Sim()->getConfig()->getApplicationCores(), false)

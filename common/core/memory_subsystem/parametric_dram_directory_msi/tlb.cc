@@ -7,7 +7,7 @@ namespace ParametricDramDirectoryMSI
 TLB::TLB(String name, String cfgname, core_id_t core_id, UInt32 num_entries, UInt32 associativity, TLB *next_level)
    : m_size(num_entries)
    , m_associativity(associativity)
-   , m_cache(name + "_cache", cfgname, core_id, num_entries / associativity, associativity, SIM_PAGE_SIZE, "lru", CacheBase::PR_L1_CACHE)
+   , m_cache(name + "_cache", cfgname, core_id, num_entries / associativity, associativity, SIM_PAGE_SIZE, "lru", CacheBase::PR_L1_CACHE, CacheBase::HASH_MOD)
    , m_next_level(next_level)
    , m_access(0)
    , m_miss(0)

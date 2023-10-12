@@ -4,7 +4,7 @@ import sys, os, math, collections, sniper_lib, sniper_stats, sniper_config, geto
 
 
 def gen_topology(resultsdir = '.', jobid = None, outputobj = sys.stdout, format = 'svg', embedded = False):
-  names = ('hwcontext', 'smt', 'L1-I', 'L1-D', 'L2', 'L3', 'L4', 'tag-dir', 'nuca-cache', 'dram-cache', 'dram-cntlr')
+  names = ('hwcontext', 'smt', 'L1-I', 'L1-D', 'L2', 'L3', 'L4', 'tag-dir', 'nuca-cache', 'dram-cache', 'dram-cntlr', 'cxl-cntlr')
   ids = dict([ (name, collections.defaultdict(lambda: None)) for name in names ])
 
   stats = sniper_stats.SniperStats(resultsdir, jobid)
@@ -35,6 +35,12 @@ def gen_topology(resultsdir = '.', jobid = None, outputobj = sys.stdout, format 
     elif name == 'dram-cache':
       value = sniper_config.get_config(config, 'perf_model/dram/cache/cache_size', lid)
       return sniper_lib.format_size(1024 * long(value), digits = 0)
+    elif name == 'dram-cntlr':
+      value = sniper_config.get_config(config, 'perf_model/dram/per_controller_size')
+      return sniper_lib.format_size(1024 * 1024 * 1024 * long(value), digits = 0)
+    elif name == 'cxl-cntlr':
+      value = sniper_config.get_config(config, "perf_model/cxl/memory_expander_" + str(lid) + "/size")
+      return sniper_lib.format_size(1024 * 1024 * 1024 * long(value), digits = 0)
     else:
       return ''
 
@@ -181,6 +187,8 @@ def gen_topology(resultsdir = '.', jobid = None, outputobj = sys.stdout, format 
                 size = min(size, concentration)
               svg.paint_box((xpos(lid), y), (size, 1), '%s-%d' % (name, lid), label, root = tile_root(lid))
               if name == 'dram-cntlr' and not is_mesh:
+                svg.paint_box((xpos(lid)-.075, -.2), (size+.15, y+1+.4), color = '#dddddd', zorder = 2, root = tile_root(lid))
+              if name == 'cxl-cntlr' and not is_mesh:
                 svg.paint_box((xpos(lid)-.075, -.2), (size+.15, y+1+.4), color = '#dddddd', zorder = 2, root = tile_root(lid))
               size = 0
           y += 1

@@ -26,6 +26,7 @@
 #include "tags.h"
 #include "instruction_tracer.h"
 #include "memory_tracker.h"
+#include "dram_trace_analysis.h"
 #include "circular_log.h"
 
 #include <sstream>
@@ -122,6 +123,7 @@ Simulator::Simulator()
    , m_faultinjection_manager(NULL)
    , m_rtn_tracer(NULL)
    , m_memory_tracker(NULL)
+   , m_dram_trace_analyzer(NULL)
    , m_running(false)
    , m_inst_mode_output(true)
 {
@@ -150,6 +152,8 @@ void Simulator::start()
    m_fastforward_performance_manager = FastForwardPerformanceManager::create();
    m_rtn_tracer = RoutineTracer::create();
    m_thread_manager = new ThreadManager();
+
+   m_dram_trace_analyzer = new DramTraceAnalyzer();
 
    if (Sim()->getCfg()->getBool("traceinput/enabled"))
       m_trace_manager = new TraceManager();

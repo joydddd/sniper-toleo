@@ -9,8 +9,25 @@
 #include "shmem_perf.h"
 #include "prefetcher.h"
 
-DramCache::DramCache(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, AddressHomeLookup* home_lookup, UInt32 cache_block_size, DramCntlrInterface *dram_cntlr)
-   : DramCntlrInterface(memory_manager, shmem_perf_model, cache_block_size)
+#if 0
+#  define MYLOG_ENABLED
+   extern Lock iolock;
+#  include "core_manager.h"
+#  include "simulator.h"
+#  define MYLOG(...) {                                                                    \
+   ScopedLock l(iolock);                                                                  \
+   fflush(stderr);                                                                        \
+   fprintf(stderr, "[%s] %d%cdr %-25s@%3u: ",                                                      \
+   itostr(getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_SIM_THREAD)).c_str(),      \
+         getMemoryManager()->getCore()->getId(),                                          \
+         Sim()->getCoreManager()->amiUserThread() ? '^' : '_', __PRETTY_FUNCTION__, __LINE__);   \
+   fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); fflush(stderr); }
+#else
+#  define MYLOG(...) {}
+#endif
+
+DramCache::DramCache(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, AddressHomeLookup* home_lookup, UInt32 cache_block_size, DramCntlrInterface *dram_cntlr, CXLAddressTranslator* cxl_address_translator)
+   : DramCntlrInterface(memory_manager, shmem_perf_model, cache_block_size, cxl_address_translator)
    , m_core_id(memory_manager->getCore()->getId())
    , m_cache_block_size(cache_block_size)
    , m_data_access_time(SubsecondTime::NS(Sim()->getCfg()->getIntArray("perf_model/dram/cache/data_access_time", m_core_id)))
@@ -75,28 +92,49 @@ DramCache::~DramCache()
 boost::tuple<SubsecondTime, HitWhere::where_t>
 DramCache::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf)
 {
-   std::pair<bool, SubsecondTime> res = doAccess(Cache::LOAD, address, requester, data_buf, now, perf);
+   boost::tuple<SubsecondTime, HitWhere::where_t> res = doAccess(Cache::LOAD, address, requester, data_buf, now, perf);
 
-   if (!res.first)
-      ++m_read_misses;
    ++m_reads;
+   switch (boost::get<1>(res)) {
+      case HitWhere::DRAM_CACHE:
+          break;
+      case HitWhere::DRAM:
+      case HitWhere::CXL:
+      case HitWhere::CXL_VN:
+         ++m_read_misses;
+          break;
+      default:
+          LOG_PRINT_ERROR("DRAM Cache: Invalid HitWhere(%s) for address %p", HitWhereString(boost::get<1>(res)), address);
+          break;
+   }
 
-   return boost::tuple<SubsecondTime, HitWhere::where_t>(res.second, res.first ? HitWhere::DRAM_CACHE : HitWhere::DRAM);
+   return res;
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
 DramCache::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now)
 {
-   std::pair<bool, SubsecondTime> res = doAccess(Cache::STORE, address, requester, data_buf, now, NULL);
-
-   if (!res.first)
-      ++m_write_misses;
+   boost::tuple<SubsecondTime, HitWhere::where_t> res = doAccess(Cache::STORE, address, requester, data_buf, now, NULL);
+   
    ++m_writes;
+   switch (boost::get<1>(res))
+   {
+      case HitWhere::DRAM_CACHE:
+          break;
+      case HitWhere::DRAM:
+      case HitWhere::CXL:
+      case HitWhere::CXL_VN:
+         ++m_write_misses;
+          break;
+      default:
+          LOG_PRINT_ERROR("DRAM Cache: Invalid HitWhere(%s) for address %p", HitWhereString(boost::get<1>(res)), address);
+          break;
+   }
 
-   return boost::tuple<SubsecondTime, HitWhere::where_t>(res.second, res.first ? HitWhere::DRAM_CACHE : HitWhere::DRAM);
+   return res;
 }
 
-std::pair<bool, SubsecondTime>
+boost::tuple<SubsecondTime, HitWhere::where_t>
 DramCache::doAccess(Cache::access_t access, IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf)
 {
    //DEBUG: perf == NULL when doAccess is called from putDataToDram
@@ -142,6 +180,12 @@ DramCache::doAccess(Cache::access_t access, IntPtr address, core_id_t requester,
          SubsecondTime dram_latency;
          HitWhere::where_t hit_where;
          boost::tie(dram_latency, hit_where) = m_dram_cntlr->getDataFromDram(address, requester, data_buf, now + latency, perf);
+         if (hit_where == HitWhere::CXL || hit_where == HitWhere::CXL_VN){ 
+            // data is located on CXL memory expander, request for data has been sent. 
+            // data is located on local DRAM, but VN is enabled. request for data on remote dram has been sent. 
+            return boost::tuple<SubsecondTime, HitWhere::where_t>(latency, hit_where);
+         }
+
          latency += dram_latency;
       }
          // For STOREs, we only do complete cache lines so we don't need to read from DRAM
@@ -149,10 +193,11 @@ DramCache::doAccess(Cache::access_t access, IntPtr address, core_id_t requester,
       insertLine(access, address, requester, data_buf, now + latency);
    }
 
+/* TODO: current cxl tranlator doesn't work for prefetchers */
    if (m_prefetcher)
       callPrefetcher(address, cache_hit, prefetch_hit, now + latency);
 
-   return std::pair<bool, SubsecondTime>(block_info ? true : false, latency);
+   return boost::tuple<SubsecondTime, HitWhere::where_t>(latency, block_info ? HitWhere::DRAM_CACHE : HitWhere::DRAM);
 }
 
 void
@@ -235,4 +280,22 @@ DramCache::callPrefetcher(IntPtr train_address, bool cache_hit, bool prefetch_hi
          }
       }
    }
+}
+
+SubsecondTime
+DramCache::handleDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
+   m_dram_cntlr->handleDataFromCXL(address, requester, data_buf, now, perf);
+   insertLine(Cache::LOAD, address, requester, data_buf, now);
+   return SubsecondTime::Zero();
+}
+
+
+SubsecondTime DramCache::handleVNUpdateFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
+   return m_dram_cntlr->handleVNUpdateFromCXL(address, requester, data_buf, now);
+}
+
+SubsecondTime DramCache::handleVNverifyFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
+   SubsecondTime verify_latency = m_dram_cntlr->handleVNverifyFromCXL(address, requester, data_buf, now, perf);
+   insertLine(Cache::LOAD, address, requester, data_buf, now);
+   return verify_latency;
 }
