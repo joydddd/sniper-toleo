@@ -13,6 +13,8 @@ DramPerfModel* DramPerfModel::createDramPerfModel(core_id_t core_id, UInt32 cach
       config_name = "perf_model/dram/type";
    } else if (dram_type == CXL_MEMORY){
       config_name = "perf_model/cxl/memory_expander_" + itostr((unsigned int)core_id) + "/dram/type";
+   } else if (dram_type == CXL_VN){
+      config_name = "perf_model/cxl/vnserver/dram/type";
    } else {
       LOG_PRINT_ERROR("Invalid DRAM perf model type %d", dram_type);
    }

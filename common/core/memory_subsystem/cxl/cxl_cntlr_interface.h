@@ -56,8 +56,8 @@ class CXLCntlrInterface
       }
       virtual ~CXLCntlrInterface() {}
 
-      virtual boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf) = 0;
-      virtual boost::tuple<SubsecondTime, HitWhere::where_t> putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now) = 0;
+      virtual boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf, cxl_id_t cxl_id = INVALID_CXL_ID) = 0;
+      virtual boost::tuple<SubsecondTime, HitWhere::where_t> putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, cxl_id_t cxl_id = INVALID_CXL_ID) = 0;
       virtual SubsecondTime getVNFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf) = 0;
       virtual SubsecondTime updateVNToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now) = 0;
 
@@ -65,6 +65,8 @@ class CXLCntlrInterface
       virtual void disablePerfModel() = 0;
       
       void handleMsgFromDram(core_id_t sender, PrL1PrL2DramDirectoryMSI::ShmemMsg* shmem_msg);
+      void handleMsgFromTagDirectory(
+          core_id_t sender, PrL1PrL2DramDirectoryMSI::ShmemMsg* shmem_msg);
 };
 
 #endif // __CXL_CNTLR_INTERFACE_H

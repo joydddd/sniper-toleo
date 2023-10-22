@@ -25,6 +25,7 @@ class DramPerfModel {
       bool m_enabled;
       core_id_t m_core_id;
       UInt64 m_num_accesses;
+      DramType m_dram_type;
       FILE* f_trace;
 
    public:

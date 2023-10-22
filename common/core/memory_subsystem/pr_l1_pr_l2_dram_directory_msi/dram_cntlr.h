@@ -9,7 +9,6 @@
 #include "shmem_msg.h"
 #include "shmem_perf.h"
 #include "fixed_types.h"
-#include "cxl_address_translator.h"
 #include "cxl_cntlr_interface.h"
 #include "memory_manager_base.h"
 #include "dram_cntlr_interface.h"
@@ -35,7 +34,7 @@ namespace PrL1PrL2DramDirectoryMSI
          FILE* f_trace; 
          std::vector<CXLCntlrInterface*> m_cxl_cntlr_list;
 
-         SubsecondTime runDramPerfModel(core_id_t requester, SubsecondTime time, IntPtr address, DramCntlrInterface::access_t access_type, ShmemPerf *perf);
+         SubsecondTime runDramPerfModel(core_id_t requester, SubsecondTime time, IntPtr address, DramCntlrInterface::access_t access_type, ShmemPerf *perf, bool is_virtual_addr = true);
 
          void addToDramAccessCount(IntPtr address, access_t access_type);
          void printDramAccessCount(void);
@@ -52,9 +51,8 @@ namespace PrL1PrL2DramDirectoryMSI
 
          // Run DRAM performance model. Pass in begin time, returns latency
          // If Data is located on DRAM, handle data request. else send request to CXL
-         boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
-         boost::tuple<SubsecondTime, HitWhere::where_t> putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
-         SubsecondTime handleDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf) { return SubsecondTime::Zero();}
+         boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf, bool is_virtual_addr = true);
+         boost::tuple<SubsecondTime, HitWhere::where_t> putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, bool is_virtual_addr = true);
          SubsecondTime handleVNUpdateFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now) { LOG_ASSERT_ERROR(false, "handleVNUpdateFromCXL not implemented in DramCntlr"); }
          SubsecondTime handleVNverifyFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf) { LOG_ASSERT_ERROR(false, "handleVNUpdateFromCXL not implemented in DramCntlr"); }
    };

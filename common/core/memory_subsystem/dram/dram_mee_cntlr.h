@@ -4,6 +4,7 @@
 #include "dram_cntlr_interface.h"
 #include "subsecond_time.h"
 #include "mee_base.h"
+#include <map>
 
 class DramMEECntlr : public DramCntlrInterface
 {
@@ -14,8 +15,8 @@ class DramMEECntlr : public DramCntlrInterface
      UInt64 m_reads, m_writes;
      UInt64 m_mac_reads, m_mac_writes;
 
-     SubsecondTime getVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
-     SubsecondTime updateVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
+ 
+     /* called by mee cntlr for getting MAC locally */
      SubsecondTime getMAC(IntPtr mac_addr, core_id_t requester, Byte* buf, SubsecondTime now, ShmemPerf *perf);
      SubsecondTime putMAC(IntPtr mac_addr, core_id_t requester, Byte* buf, SubsecondTime now);
 
@@ -26,10 +27,9 @@ class DramMEECntlr : public DramCntlrInterface
                   DramCntlrInterface* dram_cntlr, core_id_t core_id);
      ~DramMEECntlr();
 
-     boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
-     boost::tuple<SubsecondTime, HitWhere::where_t> putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
+     boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf, bool is_virtual_address = true);
+     boost::tuple<SubsecondTime, HitWhere::where_t> putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, bool is_virtual_address = true);
 
-     SubsecondTime handleDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
      SubsecondTime handleVNUpdateFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
      SubsecondTime handleVNverifyFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
 

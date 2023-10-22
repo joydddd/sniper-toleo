@@ -88,28 +88,8 @@ DramCntlr::~DramCntlr()
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
-DramCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf)
+DramCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf, bool is_virtual_addr)
 {
-   /* check if data locate in this dram */
-   if (m_address_translator){
-       cxl_req_t cxl_req;
-       cxl_req.cxl_id = m_address_translator->getHome(address);
-       cxl_req.phy_address = m_address_translator->getLinearAddress(address);
-       if (cxl_req.cxl_id != HOST_CXL_ID) {
-           MYLOG("[%d]CXL:R @ %016lx -> %016lx", requester, address, cxl_req.phy_address);
-           cxl_req.core_id = m_address_translator->getCntlrHome(cxl_req.cxl_id);
-           // send a msg to request data from CXL
-           getMemoryManager()->sendMsg(
-               PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_READ_REQ,
-               MemComponent::DRAM, MemComponent::CXL, requester, /* requester */
-               cxl_req.core_id,                                  /* receiver */
-               address, NULL, 0, HitWhere::UNKNOWN, perf,
-               ShmemPerfModel::_SIM_THREAD);
-           return boost::tuple<SubsecondTime, HitWhere::where_t>(
-               SubsecondTime::Zero(), HitWhere::CXL);
-      }
-      LOG_ASSERT_ERROR(cxl_req.cxl_id == HOST_CXL_ID, "Home for address %p is unrecognized: addr_home %d", address, cxl_req.cxl_id);
-   }
    if (Sim()->getFaultinjectionManager())
    {
       if (m_data_map.count(address) == 0)
@@ -125,7 +105,7 @@ DramCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, 
       memcpy((void*) data_buf, (void*) m_data_map[address], getCacheBlockSize());
    }
 
-   SubsecondTime dram_access_latency = runDramPerfModel(requester, now, address, READ, perf);
+   SubsecondTime dram_access_latency = runDramPerfModel(requester, now, address, READ, perf, is_virtual_addr);
 
    ++m_reads;
    #ifdef ENABLE_DRAM_ACCESS_COUNT
@@ -138,30 +118,8 @@ DramCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, 
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
-DramCntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now)
+DramCntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, bool is_virtual_addr)
 {
-   /* check if data locate in this dram */
-   if (m_address_translator){
-      cxl_req_t cxl_req;
-      cxl_req.cxl_id = m_address_translator->getHome(address);
-      cxl_req.phy_address = m_address_translator->getLinearAddress(address);
-      if (cxl_req.cxl_id != HOST_CXL_ID){
-         MYLOG("[%d]CXL:W @ %016lx -> %016lx", requester, address,
-               cxl_req.phy_address);
-         cxl_req.core_id = m_address_translator->getCntlrHome(cxl_req.cxl_id);
-         getMemoryManager()->sendMsg(
-             PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_WRITE_REQ,
-             MemComponent::DRAM, MemComponent::CXL, 
-             requester, /* requester */
-             cxl_req.core_id, /* receiver */
-             address, 
-             data_buf, getCacheBlockSize(),
-             HitWhere::CXL, &m_dummy_shmem_perf, ShmemPerfModel::_SIM_THREAD);
-         return boost::tuple<SubsecondTime, HitWhere::where_t>(SubsecondTime::Zero(), HitWhere::CXL);
-      }
-      LOG_ASSERT_ERROR(cxl_req.cxl_id == HOST_CXL_ID, "Home for address %p is unrecognized: cxl_id %d", address, cxl_req.cxl_id);
-   }
-
    if (Sim()->getFaultinjectionManager())
    {
       if (m_data_map[address] == NULL)
@@ -175,7 +133,7 @@ DramCntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, Su
          m_fault_injector->postWrite(address, address, getCacheBlockSize(), (Byte*)m_data_map[address], now);
    }
 
-   SubsecondTime dram_access_latency = runDramPerfModel(requester, now, address, WRITE, &m_dummy_shmem_perf);
+   SubsecondTime dram_access_latency = runDramPerfModel(requester, now, address, WRITE, &m_dummy_shmem_perf, is_virtual_addr);
 
    ++m_writes;
 #ifdef ENABLE_DRAM_ACCESS_COUNT
@@ -188,11 +146,14 @@ DramCntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, Su
 }
 
 SubsecondTime
-DramCntlr::runDramPerfModel(core_id_t requester, SubsecondTime time, IntPtr address, DramCntlrInterface::access_t access_type, ShmemPerf *perf)
+DramCntlr::runDramPerfModel(core_id_t requester, SubsecondTime time, IntPtr address, DramCntlrInterface::access_t access_type, ShmemPerf *perf, bool is_virtual_addr)
 {
    UInt64 pkt_size = getCacheBlockSize();
-   IntPtr phy_addr = m_address_translator ? m_address_translator->getLinearAddress(address) : address;
-   SubsecondTime dram_access_latency = m_dram_perf_model->getAccessLatency(time, pkt_size, requester, phy_addr, access_type, perf);
+   IntPtr phy_addr = is_virtual_addr && m_address_translator
+                         ? m_address_translator->getPhyAddress(address)
+                         : address;
+   SubsecondTime dram_access_latency = m_dram_perf_model->getAccessLatency(
+       time, pkt_size, requester, phy_addr, access_type, perf);
    return dram_access_latency;
 }
 

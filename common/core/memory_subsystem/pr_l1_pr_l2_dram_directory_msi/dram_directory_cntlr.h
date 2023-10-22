@@ -10,6 +10,7 @@
 #include "mem_component.h"
 #include "memory_manager_base.h"
 #include "coherency_protocol.h"
+#include "cxl_address_translator.h"
 
 class NucaCache;
 
@@ -21,6 +22,7 @@ namespace PrL1PrL2DramDirectoryMSI
          // Functional Models
          MemoryManagerBase* m_memory_manager;
          AddressHomeLookup* m_dram_controller_home_lookup;
+         CXLAddressTranslator* m_cxl_address_translator;
          DramDirectoryCache* m_dram_directory_cache;
          ReqQueueList* m_dram_directory_req_queue_list;
 
@@ -72,6 +74,7 @@ namespace PrL1PrL2DramDirectoryMSI
          DramDirectoryCntlr(core_id_t core_id,
                MemoryManagerBase* memory_manager,
                AddressHomeLookup* dram_controller_home_lookup,
+               CXLAddressTranslator* cxl_address_translator,
                NucaCache* nuca_cache,
                UInt32 dram_directory_total_entries,
                UInt32 dram_directory_associativity,
@@ -84,7 +87,7 @@ namespace PrL1PrL2DramDirectoryMSI
          ~DramDirectoryCntlr();
 
          void handleMsgFromL2Cache(core_id_t sender, ShmemMsg* shmem_msg);
-         void handleMsgFromDRAM(core_id_t sender, ShmemMsg* shmem_msg);
+         void handleMsgFromDRAM(core_id_t sender, ShmemMsg* shmem_msg); // also process reply from CXL
 
          DramDirectoryCache* getDramDirectoryCache() { return m_dram_directory_cache; }
    };

@@ -34,6 +34,7 @@ char DStateString(DirectoryState::dstate_t state) {
 DramDirectoryCntlr::DramDirectoryCntlr(core_id_t core_id,
       MemoryManagerBase* memory_manager,
       AddressHomeLookup* dram_controller_home_lookup,
+      CXLAddressTranslator* cxl_address_translator,
       NucaCache* nuca_cache,
       UInt32 dram_directory_total_entries,
       UInt32 dram_directory_associativity,
@@ -45,6 +46,7 @@ DramDirectoryCntlr::DramDirectoryCntlr(core_id_t core_id,
       ShmemPerfModel* shmem_perf_model):
    m_memory_manager(memory_manager),
    m_dram_controller_home_lookup(dram_controller_home_lookup),
+   m_cxl_address_translator(cxl_address_translator),
    m_nuca_cache(nuca_cache),
    m_core_id(core_id),
    m_cache_block_size(cache_block_size),
@@ -206,6 +208,7 @@ DramDirectoryCntlr::handleMsgFromDRAM(core_id_t sender, ShmemMsg* shmem_msg)
    switch (shmem_msg_type)
    {
       case ShmemMsg::DRAM_READ_REP:
+      case ShmemMsg::CXL_READ_REP:
          processDRAMReply(sender, shmem_msg);
          break;
 
@@ -702,8 +705,18 @@ DramDirectoryCntlr::retrieveDataAndSendToL2Cache(ShmemMsg::msg_t reply_msg_type,
       core_id_t dram_node = m_dram_controller_home_lookup->getHome(address);
 
       MYLOG("Sending request to DRAM for the data");
-      getMemoryManager()->sendMsg(PrL1PrL2DramDirectoryMSI::ShmemMsg::DRAM_READ_REQ,
-            MemComponent::TAG_DIR, MemComponent::DRAM,
+      MemComponent::component_t reciever_component = MemComponent::DRAM;
+      PrL1PrL2DramDirectoryMSI::ShmemMsg::msg_t msg_type = PrL1PrL2DramDirectoryMSI::ShmemMsg::DRAM_READ_REQ;
+      if (m_cxl_address_translator){ // check if data is located on DRAM or CXL.
+         cxl_id_t cxl_id = m_cxl_address_translator->getHome(address);
+         if (cxl_id != HOST_CXL_ID){
+            dram_node = m_cxl_address_translator->getCntlrHome(cxl_id); 
+            reciever_component = MemComponent::CXL;
+            msg_type = PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_READ_REQ;
+         }
+      }
+      getMemoryManager()->sendMsg(msg_type,
+            MemComponent::TAG_DIR, reciever_component,
             receiver /* requester */,
             dram_node /* receiver */,
             address,
@@ -768,7 +781,7 @@ DramDirectoryCntlr::processDRAMReply(core_id_t sender, ShmemMsg* shmem_msg)
 
    //   Which HitWhere to report?
 
-   HitWhere::where_t hit_where = shmem_msg->getWhere();
+   HitWhere::where_t hit_where = shmem_msg->getWhere(); // for CXL always return hitwhere = CXL
    if (hit_where == HitWhere::DRAM)
       hit_where = (sender == shmem_msg->getRequester()) ? HitWhere::DRAM_LOCAL : HitWhere::DRAM_REMOTE;
 
@@ -1214,11 +1227,21 @@ DramDirectoryCntlr::sendDataToNUCA(IntPtr address, core_id_t requester, Byte* da
 
       if (eviction)
       {
-         // Write data to Dram
+         // Write data to Dram (or CXL)
          core_id_t dram_node = m_dram_controller_home_lookup->getHome(evict_address);
+         MemComponent::component_t reciever_component = MemComponent::DRAM;
+         PrL1PrL2DramDirectoryMSI::ShmemMsg::msg_t msg_type = PrL1PrL2DramDirectoryMSI::ShmemMsg::DRAM_WRITE_REQ;
+         if (m_cxl_address_translator){ // check if data is located on DRAM or CXL.
+            cxl_id_t cxl_id = m_cxl_address_translator->getHome(address);
+            if (cxl_id != HOST_CXL_ID){
+               dram_node = m_cxl_address_translator->getCntlrHome(cxl_id); 
+               reciever_component = MemComponent::CXL;
+               msg_type = PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_WRITE_REQ;
+            }
+         }
 
-         getMemoryManager()->sendMsg(PrL1PrL2DramDirectoryMSI::ShmemMsg::DRAM_WRITE_REQ,
-               MemComponent::TAG_DIR, MemComponent::DRAM,
+         getMemoryManager()->sendMsg(msg_type,
+               MemComponent::TAG_DIR, reciever_component,
                m_core_id /* requester */,
                dram_node /* receiver */,
                evict_address,
@@ -1244,11 +1267,21 @@ DramDirectoryCntlr::sendDataToDram(IntPtr address, core_id_t requester, Byte* da
    }
    else
    {
-      // Write data to Dram
+      // Write data to Dram (or CXL)
       core_id_t dram_node = m_dram_controller_home_lookup->getHome(address);
+      PrL1PrL2DramDirectoryMSI::ShmemMsg::msg_t msg_type = PrL1PrL2DramDirectoryMSI::ShmemMsg::DRAM_WRITE_REQ;
+      MemComponent::component_t reciever_component = MemComponent::DRAM;
+      if (m_cxl_address_translator){ // check if data is located on DRAM or CXL.
+         cxl_id_t cxl_id = m_cxl_address_translator->getHome(address);
+         if (cxl_id != HOST_CXL_ID){
+            dram_node = m_cxl_address_translator->getCntlrHome(cxl_id); 
+            reciever_component = MemComponent::CXL;
+            msg_type = PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_WRITE_REQ;
+         }
+      }
 
-      getMemoryManager()->sendMsg(PrL1PrL2DramDirectoryMSI::ShmemMsg::DRAM_WRITE_REQ,
-            MemComponent::TAG_DIR, MemComponent::DRAM,
+      getMemoryManager()->sendMsg(msg_type,
+            MemComponent::TAG_DIR, reciever_component,
             requester /* requester */,
             dram_node /* receiver */,
             address,

@@ -35,12 +35,14 @@ CXLVNServerCntlr::CXLVNServerCntlr(
     m_enable_trace(false)
 {
    m_cxl_pkt_size = Sim()->getCfg()->getInt("perf_model/cxl/vnserver/pkt_size");
-   m_mee = new MEENaive(memory_manager, shmem_perf_model, core_id + 1, cache_block_size, this);
-   m_vn_length = m_mee->getVNLength(); // vn_length in bits
+   m_mee.resize(cxl_address_tranlator->getnumCXLDevices());
+   for (cxl_id_t cxl_id = 0; cxl_id < m_address_translator->getnumCXLDevices(); cxl_id++){
+      m_mee[cxl_id] = new MEENaive(memory_manager, shmem_perf_model, m_address_translator, cxl_id, cache_block_size, this);
+   }
 
-   m_vn_perf_model = CXLPerfModel::createCXLPerfModel(0, m_cxl_pkt_size);
-   registerStatsMetric("vn-vault", 0, "reads", &m_vn_reads);
-   registerStatsMetric("vn-vault", 0, "updates", &m_vn_updates);
+   m_vn_perf_model = CXLPerfModel::createCXLPerfModel(cxl_address_tranlator->getnumCXLDevices(), m_cxl_pkt_size, true);
+   registerStatsMetric("cxl", cxl_address_tranlator->getnumCXLDevices(), "reads", &m_vn_reads);
+   registerStatsMetric("cxl", cxl_address_tranlator->getnumCXLDevices(), "writes", &m_vn_updates);
    
    //Initialize stats
    m_data_reads = (UInt64*) malloc(sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
@@ -76,7 +78,9 @@ CXLVNServerCntlr::CXLVNServerCntlr(
 
 CXLVNServerCntlr::~CXLVNServerCntlr()
 {
-   if (m_mee) delete m_mee;
+   for (cxl_id_t cxl_id = 0; cxl_id < m_mee.size(); cxl_id++){
+      delete m_mee[cxl_id];
+   }
    if (m_data_reads) free(m_data_reads);
    if (m_data_writes) free(m_data_writes);
    if (m_mac_reads) free(m_mac_reads);
@@ -89,7 +93,7 @@ CXLVNServerCntlr::~CXLVNServerCntlr()
 
 
 SubsecondTime CXLVNServerCntlr::getVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
-   SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, m_vn_length, requester, address, CXLCntlrInterface::VN_READ, perf);
+   SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, 0, requester, address, CXLCntlrInterface::VN_READ, perf);
 
    ++m_vn_reads;
    MYLOG("[%d]getVN @ %016lx latency %s", requester, address, itostr(cxl_latency.getNS()).c_str());
@@ -99,7 +103,7 @@ SubsecondTime CXLVNServerCntlr::getVN(IntPtr address, core_id_t requester, Byte*
 
 
 SubsecondTime CXLVNServerCntlr::updateVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
-    SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, m_vn_length, requester, address, CXLCntlrInterface::VN_UPDATE, perf);
+    SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, 0, requester, address, CXLCntlrInterface::VN_UPDATE, perf);
 
    ++m_vn_updates;
    MYLOG("[%d]UpdateVN @ %016lx latency %s", requester, address, itostr(cxl_latency.getNS()).c_str());
@@ -107,70 +111,80 @@ SubsecondTime CXLVNServerCntlr::updateVN(IntPtr address, core_id_t requester, By
    return cxl_latency;
 }
 
-SubsecondTime CXLVNServerCntlr::getMAC(IntPtr mac_addr, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
+SubsecondTime CXLVNServerCntlr::getMAC(IntPtr mac_addr, core_id_t requester, cxl_id_t cxl_id, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
    SubsecondTime cxl_latency;
    HitWhere::where_t hit_where;
-   boost::tie(cxl_latency, hit_where) = m_cxl_cntlr->getDataFromCXL(mac_addr, requester, data_buf, now, perf);
+   LOG_ASSERT_ERROR(cxl_id != HOST_CXL_ID, "mac is not located on CXL cntlr");
+   boost::tie(cxl_latency, hit_where) = m_cxl_cntlr->getDataFromCXL(mac_addr, requester, data_buf, now, perf, cxl_id);
    LOG_ASSERT_ERROR(hit_where == HitWhere::CXL, "MAC %lu should be in CXL memory expander", mac_addr);
 
-   cxl_id_t cxl_id = m_address_translator->getHome(mac_addr);
    ++m_mac_reads[cxl_id];
    MYLOG("[%d]getMAC @ %016lx latency %s", requester, mac_addr, itostr(cxl_latency.getNS()).c_str());
    return cxl_latency;
 }
 
-SubsecondTime CXLVNServerCntlr::putMAC(IntPtr mac_addr, core_id_t requester, Byte* data_buf, SubsecondTime now){
+SubsecondTime CXLVNServerCntlr::putMAC(IntPtr mac_addr, core_id_t requester, cxl_id_t cxl_id, Byte* data_buf, SubsecondTime now){
    SubsecondTime cxl_latency;
    HitWhere::where_t hit_where;
-   boost::tie(cxl_latency, hit_where) = m_cxl_cntlr->putDataToCXL(mac_addr, requester, data_buf, now);
+   LOG_ASSERT_ERROR(cxl_id != HOST_CXL_ID, "mac is not located on CXL cntlr");
+   // mac_addr is physical address local to CXL cntlr 
+   boost::tie(cxl_latency, hit_where) = m_cxl_cntlr->putDataToCXL(mac_addr, requester, data_buf, now, cxl_id);
    LOG_ASSERT_ERROR(hit_where == HitWhere::CXL, "MAC %lu should be in CXL memory expander", mac_addr);
 
-   cxl_id_t cxl_id = m_address_translator->getHome(mac_addr);
    ++m_mac_writes[cxl_id];
    MYLOG("[%d]putMAC @ %016lx", requester, mac_addr);
    return SubsecondTime::Zero();
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t> 
-CXLVNServerCntlr::getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
-   SubsecondTime vn_latency, mac_latency, verify_latency, decrypt_latency;
+CXLVNServerCntlr::getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf, cxl_id_t cxl_id){
+   SubsecondTime vn_latency, mac_latency, dram_latency;
    SubsecondTime latency;
    HitWhere::where_t hit_where, hit_where_mac;
-  
 
-   boost::tie(latency, hit_where) = m_cxl_cntlr->getDataFromCXL(address, requester, data_buf, now, perf); // fetch data from CXL memory expander
+   LOG_ASSERT_ERROR(cxl_id == INVALID_CXL_ID, "cxl vnserver cntlr only accepts virtual address");
+   cxl_id = m_address_translator->getHome(address);
+
+   /* Fetch Data */
+   boost::tie(dram_latency, hit_where) = m_cxl_cntlr->getDataFromCXL(address, requester, data_buf, now, perf); // fetch data from CXL memory expander
    LOG_ASSERT_ERROR(hit_where == HitWhere::CXL, "Data %lu should be in CXL memory expander", address);
-   boost::tie(mac_latency, vn_latency, hit_where_mac) = m_mee->fetchMACVN(address, requester, now, perf); // fetch MAC & VN. (MEE_CACHE, or CXL, CXL_VN)
+
+   /* Fetch VN and MAC for verification */
+   boost::tie(mac_latency, vn_latency, hit_where_mac) = m_mee[cxl_id]->fetchMACVN(address, requester, now, perf); // fetch MAC & VN. (MEE_CACHE, or CXL, CXL_VN)
+   if (hit_where_mac == HitWhere::CXL_VN) hit_where = HitWhere::CXL_VN;
+   latency = dram_latency > mac_latency ? dram_latency : mac_latency;
+   latency = latency > vn_latency ? latency : vn_latency;
+
+   /* Verify Data */
+   SubsecondTime decrypt_latency = m_mee[cxl_id]->DecryptVerifyData(address, requester, now + latency, perf);
+   latency += decrypt_latency;
    
-   decrypt_latency = m_mee->decryptData(address, requester, now + vn_latency, perf); // decrypt cipher text (dependent on VN)
-   latency = decrypt_latency + vn_latency > latency ? decrypt_latency + vn_latency : latency;
-   
-   verify_latency = m_mee->verifyMAC(address, requester, now + latency, perf); // verify MAC
-   latency = verify_latency + latency > mac_latency ? verify_latency + latency : mac_latency;
-   
-   cxl_id_t cxl_id = m_address_translator->getHome(address);
    ++m_data_reads[cxl_id];
    MYLOG("[%d]R @ %016lx latency %s", requester, address, itostr(latency.getNS()).c_str());
-   return boost::make_tuple(latency, hit_where_mac);
+   return boost::make_tuple(latency, hit_where);
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t> 
-CXLVNServerCntlr::putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
-   SubsecondTime encryption_latency, vn_latency, mac_latency, latency;
-   HitWhere::where_t hit_where, hit_where_mac;
+CXLVNServerCntlr::putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, cxl_id_t cxl_id){
+   SubsecondTime encryption_latency, vn_latency, dram_latency, latency;
+   HitWhere::where_t hit_where;
 
-   cxl_id_t cxl_id = m_address_translator->getHome(address);
+   LOG_ASSERT_ERROR(cxl_id == INVALID_CXL_ID, "cxl vnserver cntlr only accepts virtual address");
+   cxl_id = m_address_translator->getHome(address);
+
+   /* Update VN */
+   vn_latency = updateVN(address, requester, data_buf, now, &m_dummy_shmem_perf); // always update VN in VN Vault, even when it is cached. 
+
+   /* Encrypt Data and Gen MAC*/
+   encryption_latency = m_mee[cxl_id]->EncryptGenMAC(address, requester, now + vn_latency); // encrypt data (is dependent on VN)
+   boost::tie(dram_latency, hit_where) = m_cxl_cntlr->putDataToCXL(address, requester, data_buf, now + encryption_latency + vn_latency); // put cipher text data to CXL
+   LOG_ASSERT_ERROR(hit_where == HitWhere::CXL, "Data %lu should be in CXL memory expander", address);
+
+   latency = dram_latency + encryption_latency + vn_latency;
+
    ++m_data_writes[cxl_id];
    MYLOG("[%d]W @ %016lx ", requester, address);
-   
-   vn_latency = updateVN(address, requester, data_buf, now, &m_dummy_shmem_perf); // always update VN in VN Vault, even when it is cached. 
-   encryption_latency = m_mee->encryptData(address, requester, now + vn_latency); // encrypt data (is dependent on VN)
-   boost::tie(latency, hit_where) = m_cxl_cntlr->putDataToCXL(address, requester, data_buf, now + encryption_latency + vn_latency); // put cipher text data to CXL
-   LOG_ASSERT_ERROR(hit_where == HitWhere::CXL, "Data %lu should be in CXL memory expander", address);
-   
-   boost::tie(mac_latency, hit_where_mac) = m_mee->genMAC(address, requester, now + encryption_latency + vn_latency); // generate MAC
-
-   return boost::make_tuple(SubsecondTime::Zero(), hit_where_mac);
+   return boost::make_tuple(SubsecondTime::Zero(), hit_where);
 }
 
 SubsecondTime CXLVNServerCntlr::getVNFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
@@ -184,7 +198,9 @@ SubsecondTime CXLVNServerCntlr::updateVNToCXL(IntPtr address, core_id_t requeste
 void CXLVNServerCntlr::enablePerfModel() 
 {
    m_vn_perf_model->enable();
-   m_mee->enablePerfModel();
+   for (cxl_id_t cxl_id = 0; cxl_id < m_address_translator->getnumCXLDevices(); cxl_id++){
+      m_mee[cxl_id]->enablePerfModel();
+   }
    m_cxl_cntlr->enablePerfModel();
    m_enable_trace = true;
 }
@@ -192,7 +208,9 @@ void CXLVNServerCntlr::enablePerfModel()
 void CXLVNServerCntlr::disablePerfModel() 
 {
    m_vn_perf_model->disable();
-   m_mee->disablePerfModel();
+   for (cxl_id_t cxl_id = 0; cxl_id < m_address_translator->getnumCXLDevices(); cxl_id++){
+      m_mee[cxl_id]->disablePerfModel();
+   }
    m_cxl_cntlr->disablePerfModel();
    m_enable_trace = false;
 }

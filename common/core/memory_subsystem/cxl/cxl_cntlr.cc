@@ -72,10 +72,13 @@ CXLCntlr::~CXLCntlr()
 #endif // MYLOG_ENABLED
 }
 
-
-boost::tuple<SubsecondTime, HitWhere::where_t> CXLCntlr::getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
-   cxl_id_t cxl_id = m_address_translator->getHome(address);
-   IntPtr local_address = m_address_translator->getLinearAddress(address);
+// if cxl_id is specified, address is virtual. Otherwise address is physical. 
+boost::tuple<SubsecondTime, HitWhere::where_t> CXLCntlr::getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf, cxl_id_t cxl_id){
+   IntPtr local_address = address;
+   if (cxl_id == INVALID_CXL_ID){ // address is virtual address
+      cxl_id = m_address_translator->getHome(address);
+      local_address = m_address_translator->getPhyAddress(address);
+   } 
    UInt64 pkt_size = getCacheBlockSize() * 8; /* Byte to bits */
 
    LOG_ASSERT_ERROR(m_cxl_connected[cxl_id], "CXL %d is not connected", cxl_id);
@@ -89,9 +92,12 @@ boost::tuple<SubsecondTime, HitWhere::where_t> CXLCntlr::getDataFromCXL(IntPtr a
 
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
-CXLCntlr::putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
-   cxl_id_t cxl_id = m_address_translator->getHome(address);
-   IntPtr local_address = m_address_translator->getLinearAddress(address);
+CXLCntlr::putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, cxl_id_t cxl_id){
+   IntPtr local_address = address;
+   if (cxl_id == INVALID_CXL_ID){ // address is virtual address
+      cxl_id = m_address_translator->getHome(address);
+      local_address = m_address_translator->getPhyAddress(address);
+   } 
    UInt64 pkt_size = getCacheBlockSize() * 8;/* Byte to bits */
 
    LOG_ASSERT_ERROR(m_cxl_connected[cxl_id], "CXL %d is not connected", cxl_id);

@@ -24,16 +24,16 @@ class CXLAddressTranslator
       // Within cxl node, return unique, incrementing block number
       IntPtr getLinearPage(IntPtr address);
       // Within cxl node, return unique, incrementing address to be used in cache set selection
-      IntPtr getLinearAddress(IntPtr address);
+      IntPtr getPhyAddress(IntPtr address);
 
       UInt32 getnumCXLDevices() { return m_num_cxl_devs; }
 
       void printPageUsage();
       void printPageTable();
 
-      static IntPtr getMACaddr(IntPtr address); // generated MAC address for a given address. (assigned to the same page, but start with 0xc). 
-#define MAC_MARK ((UInt64)0xc << 60)
-#define MAC_MASK ((UInt64)0xf << 60)
+      // generated (physical) MAC address for a given virtual address. Assigned to dedicated MAC region. 
+      IntPtr getMACAddrFromVirtual(IntPtr virtual_address); 
+      IntPtr getMACAddrFromPhysical(IntPtr phy_addr, cxl_id_t cxl_id);
    
 
      private:
@@ -43,7 +43,9 @@ class CXLAddressTranslator
       UInt32 m_page_offset;
 
       bool m_has_mac; // in Bytes
-      UInt32 m_mac_size_per_page; // number of Bytes reserved for MAC in a page
+      UInt32 m_mac_per_cl; // number of MACs to fit in one cacheline 
+      UInt32 m_cacheline_size; // in Bytes
+      std::vector<IntPtr> m_mac_offset; // address offset for mac. index with cxl_id, host index with m_num_cxl_devs
 
       std::unordered_map<IntPtr, IntPtr> m_addr_map; // mapping Virtual Page Number to CXL Node + Linear Page Number
       std::vector<UInt64> m_cxl_dev_size; // in Bytes
@@ -53,7 +55,7 @@ class CXLAddressTranslator
       std::vector<float> m_page_distribution;
 
       IntPtr allocatePage(IntPtr vpn); // return physical page number
-      IntPtr getPPN(IntPtr address);
+      IntPtr getPPN(IntPtr vpn);
 
       cxl_id_t m_last_allocated; // home mapped to m_num_cxl_devs
       FILE* f_page_table;

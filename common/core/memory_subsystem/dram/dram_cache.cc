@@ -90,7 +90,7 @@ DramCache::~DramCache()
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
-DramCache::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf)
+DramCache::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf, bool is_virtual_addr)
 {
    boost::tuple<SubsecondTime, HitWhere::where_t> res = doAccess(Cache::LOAD, address, requester, data_buf, now, perf);
 
@@ -112,7 +112,7 @@ DramCache::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, 
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
-DramCache::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now)
+DramCache::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, bool is_virtual_addr)
 {
    boost::tuple<SubsecondTime, HitWhere::where_t> res = doAccess(Cache::STORE, address, requester, data_buf, now, NULL);
    
@@ -280,13 +280,6 @@ DramCache::callPrefetcher(IntPtr train_address, bool cache_hit, bool prefetch_hi
          }
       }
    }
-}
-
-SubsecondTime
-DramCache::handleDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
-   m_dram_cntlr->handleDataFromCXL(address, requester, data_buf, now, perf);
-   insertLine(Cache::LOAD, address, requester, data_buf, now);
-   return SubsecondTime::Zero();
 }
 
 

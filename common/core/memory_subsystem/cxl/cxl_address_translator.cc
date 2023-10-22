@@ -10,6 +10,9 @@
 
 #define MAX_PAGE_NUM_BITS 56
 
+#define ONE_G (float)1000*1000*1000
+#define ONE_M  (float)1000*1000
+
 // DEBUG:
 #if 0
 #  define MYLOG_ENABLED
@@ -32,9 +35,11 @@ CXLAddressTranslator::CXLAddressTranslator(
       UInt64 dram_total_size):
       m_num_cxl_devs(cxl_memory_expander_size.size()),
       m_dram_size(dram_total_size),
-      m_page_size(page_size),
-      m_page_offset(log2(page_size)),
-      m_mac_size_per_page(0),
+      m_page_size(page_size), // in bytes, usually = 4K
+      m_page_offset(log2(page_size)), // in bits, usually = 12
+      m_mac_per_cl(0),
+      m_cacheline_size(cacheline_size),
+      m_mac_offset(m_num_cxl_devs+1, 0),
       m_cxl_dev_size(cxl_memory_expander_size),
       m_num_allocated_pages(NULL),
       m_cxl_cntlr_core_list(cxl_cntlr_core_list),
@@ -82,15 +87,41 @@ CXLAddressTranslator::CXLAddressTranslator(
 
    f_page_table = fopen("page_table.log", "w+");
 
-   // Remap MAC address to the end of each page. 
+   // Remap MAC address to a dedicated area: last 1/9 of address space. 
    m_has_mac = Sim()->getCfg()->getBool("perf_model/mee/enable"); // if allocate extra space for mac. 
    if (m_has_mac) {
-      m_mac_size_per_page = Sim()->getCfg()->getInt("perf_model/mee/mac_length") ; // mac_length in bits
-      m_mac_size_per_page = (m_mac_size_per_page * (page_size / cacheline_size)) / 8; // covert to bytes per page
+      m_mac_per_cl = Sim()->getCfg()->getInt("perf_model/mee/mac_per_cl") ; // mac_length in bits
+      UInt32 mac_size_per_page = (page_size / m_mac_per_cl); // covert to bytes per page
+      for (cxl_id_t cxl_id = 0; cxl_id < m_num_cxl_devs; cxl_id++){
+         UInt64 num_pages_per_dev = m_cxl_dev_size[cxl_id] / (m_page_size + mac_size_per_page);
+         m_mac_offset[cxl_id] = num_pages_per_dev * m_page_size;
+      }
+      {// dram
+         UInt64 num_pages_per_dev = m_dram_size / (m_page_size + mac_size_per_page);
+         m_mac_offset[m_num_cxl_devs] = num_pages_per_dev * m_page_size;
+      }
+
+      fprintf(f_page_table,"Address Space breakdown for MAC + Salt: \n");
+      for (cxl_id_t cxl_id = 0; cxl_id < m_num_cxl_devs; cxl_id++){
+         fprintf(f_page_table, "CXL Dev %d %.2f GB: \n", cxl_id, m_cxl_dev_size[cxl_id] / ONE_G);
+         fprintf(f_page_table, "\t\t\tdata 0x%12lx - 0x%12lx, %.2f GB\n", (unsigned long int)0, m_mac_offset[cxl_id], m_mac_offset[cxl_id] / ONE_G);
+         fprintf(f_page_table, "\t\t\tmax+salt 0x%12lx - 0x%12lx, %.2f GB\n", m_mac_offset[cxl_id], m_cxl_dev_size[cxl_id], (m_cxl_dev_size[cxl_id] - m_mac_offset[cxl_id]) / ONE_G);
+      }
+      {
+         fprintf(f_page_table, "DRAM Dev %.2f GB: \n", m_dram_size / ONE_G);
+         fprintf(f_page_table, "\t\t\tdata 0x%12lx - 0x%12lx, %.2f GB\n", 0, m_mac_offset[m_num_cxl_devs], m_mac_offset[m_num_cxl_devs] / ONE_G);
+         fprintf(f_page_table, "\t\t\tmax+salt 0x%12lx - 0x%12lx, %.2f GB\n", m_mac_offset[m_num_cxl_devs], m_dram_size, (m_dram_size - m_mac_offset[m_num_cxl_devs]) / ONE_G);
+      }
+   } else {
+      for (cxl_id_t cxl_id = 0; cxl_id < m_num_cxl_devs; cxl_id++){
+         m_mac_offset[cxl_id] = m_cxl_dev_size[cxl_id];
+      }
+      m_mac_offset[m_num_cxl_devs] = m_dram_size; // dram
    }
 
    // Allocate arrays
-   m_num_allocated_pages = (UInt64*)malloc(sizeof(UInt64) * (m_num_cxl_devs + 1));
+   m_num_allocated_pages =
+           (UInt64*)malloc(sizeof(UInt64) * (m_num_cxl_devs + 1));
    memset(m_num_allocated_pages, 0, sizeof(UInt64) * (m_num_cxl_devs + 1));
 
    // register stats for page mapping 
@@ -101,17 +132,24 @@ CXLAddressTranslator::CXLAddressTranslator(
    
 }
 
-IntPtr CXLAddressTranslator::getMACaddr(IntPtr address){
-   static UInt32 mac_size = Sim()->getCfg()->getInt("perf_model/mee/mac_length"); // in bits
-   static UInt32 cache_block_size = Sim()->getCfg()->getInt("perf_model/l2_cache/cache_block_size"); // in bytes
-   static UInt32 mac_per_cacheline = (cache_block_size * 8) / mac_size;
-   static UInt32 page_offset = Sim()->getCfg()->getInt("system/addr_trans/page_offset");
-   IntPtr vpn = address >> page_offset;
-   IntPtr mac_addr = (address & (((IntPtr)1 << page_offset) - 1)) / mac_per_cacheline;
-   mac_addr = (mac_addr / cache_block_size) * cache_block_size; // round down to cacheline boundary
-   mac_addr = MAC_MARK | (vpn << page_offset) | mac_addr;
-   // fprintf(stderr, "addr: 0x%016lx -> mac_addr: 0x%016lx\n", address, mac_addr);
-   LOG_ASSERT_ERROR( (MAC_MASK & address) == 0, "MAC address 0x%016lx exceeds the limit 0x%016lx", mac_addr, MAC_MASK);
+IntPtr CXLAddressTranslator::getMACAddrFromVirtual(IntPtr virtual_address){
+   IntPtr phy_addr = getPhyAddress(virtual_address);
+   cxl_id_t cxl_id = getHome(virtual_address);
+   return getMACAddrFromPhysical(phy_addr, cxl_id);
+   
+}
+
+IntPtr CXLAddressTranslator::getMACAddrFromPhysical(IntPtr phy_addr, cxl_id_t cxl_id){
+   LOG_ASSERT_ERROR(m_has_mac, "getMACaddr when mac is not enabled\n");
+
+   IntPtr mac_addr = m_mac_offset[cxl_id];
+   // Align physical address to cacheline * #mac/ CL boundary, and map to mac region
+   mac_addr += phy_addr / (m_mac_per_cl * m_cacheline_size) * m_cacheline_size;
+
+   LOG_ASSERT_ERROR((mac_addr & (m_cacheline_size - 1)) == 0,
+                    "physical addr 0x%12lx MAC addr 0x%12lx is "
+                    "not aligned to cacheline (mac offset 0x%12lx)",
+                     phy_addr, mac_addr, m_mac_offset[cxl_id]);
    return mac_addr;
 }
 
@@ -127,7 +165,7 @@ CXLAddressTranslator::~CXLAddressTranslator()
 
 cxl_id_t CXLAddressTranslator::getHome(IntPtr address)
 {
-   cxl_id_t cxl_id = getPPN(address) >> MAX_PAGE_NUM_BITS;
+   cxl_id_t cxl_id = getPPN(address >> m_page_offset ) >> MAX_PAGE_NUM_BITS;
    MYLOG("0x%016lx -> cxl_id: %d", address, cxl_id);
    return cxl_id;
 }
@@ -141,37 +179,23 @@ core_id_t CXLAddressTranslator::getCntlrHome(cxl_id_t cxl_id)
 
 IntPtr CXLAddressTranslator::getLinearPage(IntPtr address)
 {
-   return getPPN(address) & (((IntPtr)1 << MAX_PAGE_NUM_BITS) - 1);
+   return getPPN(address >> m_page_offset ) & (((IntPtr)1 << MAX_PAGE_NUM_BITS) - 1);
 }
 
-IntPtr CXLAddressTranslator::getLinearAddress(IntPtr address)
+IntPtr CXLAddressTranslator::getPhyAddress(IntPtr virtual_address)
 {
-   IntPtr linear_addr; 
-   if ((address & MAC_MASK) == MAC_MARK){ // mac_address
-      LOG_ASSERT_ERROR(m_has_mac, "address 0x%016lx is a mac address but mac is not enabled", address);
-      LOG_ASSERT_ERROR((address & (((IntPtr)1 << m_page_offset) - 1)) < m_mac_size_per_page, "mac_addr 0x%016lx has offset larger than mac_size_per_page", address);
-      linear_addr = getLinearPage(address) * (m_page_size + m_mac_size_per_page) +
-             m_page_size + (address & (((IntPtr)1 << m_page_offset) - 1));
-   } else {
-      if (m_has_mac){
-         linear_addr =  getLinearPage(address) * (m_page_size + m_mac_size_per_page) + 
-         (address & (((IntPtr)1 << m_page_offset) - 1));
-      } else {
-         linear_addr =  getLinearPage(address) << m_page_offset | (address & (((IntPtr)1 << m_page_offset) - 1));
-      }
-   }
-   MYLOG("Linear addr: 0x%016lx -> 0x%016lx\n", address, linear_addr);
-   return linear_addr;
+   IntPtr phy_addr; 
+   phy_addr =  getLinearPage(virtual_address) << m_page_offset | (virtual_address & (((IntPtr)1 << m_page_offset) - 1));
+   MYLOG("Linear addr: 0x%016lx -> 0x%016lx\n", virtual_address, phy_addr);
+   return phy_addr;
 }
 
-IntPtr CXLAddressTranslator::getPPN(IntPtr address)
+IntPtr CXLAddressTranslator::getPPN(IntPtr vpn)
 {
-   IntPtr vpn = (m_has_mac ? (address & ~(MAC_MASK)) : address ) >> m_page_offset;
    IntPtr ppn = 0;
    auto it_vpn = m_addr_map.find(vpn);
    if (it_vpn == m_addr_map.end()){
       // page have never been accessed before
-      LOG_ASSERT_ERROR( (address & MAC_MASK) != MAC_MARK, "address 0x%016lx is a mac address but page has never been allocated", address)
       ppn = allocatePage(vpn);
    } else {
       ppn = it_vpn->second;
@@ -224,9 +248,9 @@ IntPtr CXLAddressTranslator::allocatePage(IntPtr vpn){
 void CXLAddressTranslator::printPageUsage(){
    fprintf(f_page_table,"Page Usage:\n");
    for (unsigned int i = 0; i < m_num_cxl_devs; i++) {
-      fprintf(f_page_table, "\tCXL Node %u: %lu pages %.4f MB / %.2f GB\n", i, m_num_allocated_pages[i],  m_num_allocated_pages[i] * m_page_size /((float)1000*1000), m_cxl_dev_size[i]/((float)1000*1000*1000));
+      fprintf(f_page_table, "\tCXL Node %u: %lu pages %.4f MB / %.2f GB\n", i, m_num_allocated_pages[i],  m_num_allocated_pages[i] * m_page_size /((float)1000*1000), m_mac_offset[i]/((float)1000*1000*1000));
    }
-   fprintf(f_page_table, "\tDRAM: %lu pages %.4f MB / %.2f GB\n", m_num_allocated_pages[m_num_cxl_devs],  m_num_allocated_pages[m_num_cxl_devs] * m_page_size /((float)1000*1000), m_dram_size/((float)1000*1000*1000));
+   fprintf(f_page_table, "\tDRAM: %lu pages %.4f MB / %.2f GB\n", m_num_allocated_pages[m_num_cxl_devs],  m_num_allocated_pages[m_num_cxl_devs] * m_page_size /((float)1000*1000), m_mac_offset[m_num_cxl_devs]/((float)1000*1000*1000));
 }
 
 

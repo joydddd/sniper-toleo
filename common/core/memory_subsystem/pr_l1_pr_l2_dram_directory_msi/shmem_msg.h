@@ -36,10 +36,10 @@ namespace PrL1PrL2DramDirectoryMSI
             // DRAM > tag directory
             DRAM_READ_REP,
 
-            // DRAM > CXL
+            // Tag directory > CXL
             CXL_READ_REQ,
             CXL_WRITE_REQ,
-            // CXL > DRAM
+            // CXL > Tag directory
             CXL_READ_REP,
 
             // VNServer Request: DRAM <=> CXL cntlr
