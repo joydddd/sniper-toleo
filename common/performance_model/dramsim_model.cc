@@ -122,6 +122,7 @@ SubsecondTime DRAMsimCntlr::addTrans(SubsecondTime t_sniper, IntPtr addr, bool i
    if (t_sniper < t_start_ && sim_status_ == SIM_WARMUP) return read_lat_generator.get_latency(); // skip if request is too early
    LOG_ASSERT_ERROR(t_sniper >= t_start_, "DRAM Request too early: t_sniper %ld, t_start %ld", t_sniper.getNS(), t_start_.getNS());
    uint64_t req_clk =  (t_sniper - t_start_).getInternalDataForced() / dram_period.getPeriod().getInternalDataForced();
+   if (req_clk < clk_ && sim_status_ == SIM_WARMUP) return read_lat_generator.get_latency(); // skip if request is too early
    LOG_ASSERT_ERROR(req_clk >= clk_, "DRAM Request outside of Epoch: req_clk %ld, clk_ %ld", req_clk, clk_);
    t_latest_req_ = t_sniper > t_latest_req_ ? t_sniper : t_latest_req_;
    clk_latest_req_ = req_clk > clk_latest_req_ ? req_clk : clk_latest_req_;
@@ -142,11 +143,11 @@ void DRAMsimCntlr::advance(SubsecondTime t_barrier){
       status_ = DRAMSIM_RUNNING;
       fprintf(stderr, "[DRAMSIM #%d] First Barrier at %ld ns, clk %lu\n", ch_id, t_barrier.getNS(), clk_);
    }
-   if (status_ == DRAMSIM_RUNNING){ // run DRAMsim
+   if (status_ == DRAMSIM_RUNNING){ // run DRAMsim/
       uint64_t barrier_clk =  (t_barrier - t_start_).getInternalDataForced() / dram_period.getPeriod().getInternalDataForced();
       read_lat_generator.newEpoch();
-      runDRAMsim(barrier_clk);
-      // fprintf(stderr, "[DRAMSIM #%d] Barrier at %ld ns, clk %lu\n", ch_id, t_barrier.getNS(), barrier_clk);
+      runDRAMsim(barrier_clk > epoch_size ? barrier_clk - epoch_size : 0);
+      fprintf(stderr, "[DRAMSIM #%d] Barrier at %ld ns, clk %lu\n", ch_id, t_barrier.getNS(), barrier_clk);
    }
 }
 
