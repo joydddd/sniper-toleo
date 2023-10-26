@@ -92,7 +92,7 @@ CXLVNServerCntlr::~CXLVNServerCntlr()
 }
 
 
-SubsecondTime CXLVNServerCntlr::getVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
+SubsecondTime CXLVNServerCntlr::getVN(IntPtr address, core_id_t requester, SubsecondTime now, ShmemPerf *perf){
    SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, 0, requester, address, CXLCntlrInterface::VN_READ, perf);
 
    ++m_vn_reads;
@@ -102,7 +102,7 @@ SubsecondTime CXLVNServerCntlr::getVN(IntPtr address, core_id_t requester, Byte*
 }
 
 
-SubsecondTime CXLVNServerCntlr::updateVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
+SubsecondTime CXLVNServerCntlr::updateVN(IntPtr address, core_id_t requester, SubsecondTime now, ShmemPerf *perf){
     SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, 0, requester, address, CXLCntlrInterface::VN_UPDATE, perf);
 
    ++m_vn_updates;
@@ -173,7 +173,7 @@ CXLVNServerCntlr::putDataToCXL(IntPtr address, core_id_t requester, Byte* data_b
    cxl_id = m_address_translator->getHome(address);
 
    /* Update VN */
-   vn_latency = updateVN(address, requester, data_buf, now, &m_dummy_shmem_perf); // always update VN in VN Vault, even when it is cached. 
+   vn_latency = updateVN(address, requester, now, &m_dummy_shmem_perf); // always update VN in VN Vault, even when it is cached. 
 
    /* Encrypt Data and Gen MAC*/
    encryption_latency = m_mee[cxl_id]->EncryptGenMAC(address, requester, now + vn_latency); // encrypt data (is dependent on VN)
@@ -188,11 +188,11 @@ CXLVNServerCntlr::putDataToCXL(IntPtr address, core_id_t requester, Byte* data_b
 }
 
 SubsecondTime CXLVNServerCntlr::getVNFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
-   return getVN(address, requester, data_buf, now, perf);
+   return getVN(address, requester, now, perf);
 }
 
 SubsecondTime CXLVNServerCntlr::updateVNToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
-   return updateVN(address, requester, data_buf, now, NULL);
+   return updateVN(address, requester, now, NULL);
 }
 
 void CXLVNServerCntlr::enablePerfModel() 

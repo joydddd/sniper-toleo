@@ -67,7 +67,7 @@ MEENaive::MEENaive(MemoryManagerBase *memory_manager,
     m_vn_table_entries = Sim()->getCfg()->getInt("perf_model/mee/vn_table/entries");
     m_vn_per_entry = Sim()->getCfg()->getInt("perf_model/mee/vn_table/vn_per_entry");
     m_vn_table_latency = SubsecondTime::NS(Sim()->getCfg()->getInt("perf_model/mee/vn_table/latency"));
-    m_vn_table = new Cache("vn_cache", "perf_model/mee/vn-table", m_core_id,
+    m_vn_table = new Cache("vn-cache", "perf_model/mee/vn-table", m_core_id,
                            m_vn_table_entries, 1, getCacheBlockSize() * m_vn_per_entry, "lru",
                            CacheBase::PR_L1_CACHE, CacheBase::HASH_MOD);
 
@@ -102,7 +102,6 @@ MEENaive::accessMAC(IntPtr v_addr, Cache::access_t access, core_id_t requester, 
         // Always get mac from DRAM/CXL cntlr (WRITE ALLOCATE)
         hit_where = m_cxl_cntlr ? HitWhere::CXL : HitWhere::DRAM;
         MYLOG("[%d]load MAC @ %016lx", requester, mac_addr);
-         // TODO: update getMAC
         if (m_cxl_cntlr) { // of native type CXLVNServerCntlr
             latency += ((CXLVNServerCntlr*) m_cxl_cntlr)->getMAC(mac_addr, requester, m_cxl_id, data_buf, now + latency, perf);
         } else if (m_dram_cntlr) {
@@ -164,13 +163,15 @@ MEENaive::lookupVN(IntPtr v_addr, core_id_t requester, SubsecondTime now, ShmemP
     SubsecondTime latency = m_vn_table_latency;
     IntPtr vn_entry_idx = v_addr / (m_vn_per_entry * getCacheBlockSize());
     bool hit = m_vn_table->accessSingleLine(vn_entry_idx, Cache::LOAD, NULL, 0, now, true);
-    if (hit) return boost::make_tuple<SubsecondTime, HitWhere::where_t>(latency, HitWhere::MEE_CACHE);
+    if (hit) {
+        return boost::make_tuple<SubsecondTime, HitWhere::where_t>(latency, HitWhere::MEE_CACHE);
+    } 
+
 
     /* If we're on CXL, fetch VN from CXL */
     if (m_cxl_cntlr){
         MYLOG("[%d]fetch VN @ %016lx", requester, vn_entry_idx);
-        // TODO: update getVN
-        // latency += ((CXLVNServerCntlr*) m_cxl_cntlr)->getVN(vn_entry_idx, requester, now, perf);
+        latency += ((CXLVNServerCntlr*) m_cxl_cntlr)->getVN(v_addr, requester, now, perf);
         // do not allocate vn entry. Only allocate on DecryptVerifyData. 
     }
     m_vn_misses++;

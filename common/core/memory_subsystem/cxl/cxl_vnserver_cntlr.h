@@ -32,8 +32,8 @@ class CXLVNServerCntlr : public CXLCntlrInterface
      FILE* f_trace;
      bool m_enable_trace;
      
-     SubsecondTime getVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
-     SubsecondTime updateVN(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
+     SubsecondTime getVN(IntPtr address, core_id_t requester, SubsecondTime now, ShmemPerf *perf);
+     SubsecondTime updateVN(IntPtr address, core_id_t requester, SubsecondTime now, ShmemPerf *perf);
      SubsecondTime getMAC(IntPtr mac_addr, core_id_t requester, cxl_id_t cxl_id, Byte* buf, SubsecondTime now, ShmemPerf *perf);
      SubsecondTime putMAC(IntPtr mac_addr, core_id_t requester, cxl_id_t cxl_id, Byte* buf, SubsecondTime now);
 

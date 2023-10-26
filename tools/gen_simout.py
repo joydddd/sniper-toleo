@@ -133,6 +133,14 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
       ('    miss rate', '%s.missrate'%c, lambda v: '%.2f%%' % v),
       ('    mpki', '%s.mpki'%c, lambda v: '%.2f' % v),
     ])
+    
+  if 'page_table.pages' in results:
+    results['page_table.usage'] = map(lambda a: float(config['system/addr_trans/page_size']) * a / (1024*1024), results['page_table.pages'])
+    template += [
+      ('Page Tabel summary', '', ''),
+      ('  num pages [cxl, dram]', 'page_table.pages', str),
+      ('  usage (GB) [cxl, dram]', 'page_table.usage', lambda v: '%.4f' % v),
+    ]
 
   results['dram.accesses'] = map(sum, zip(results['dram.reads'], results['dram.writes']))
   results['dram.avglatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['dram.total-access-latency'], results['dram.accesses']))
@@ -165,7 +173,7 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     ]
     results['dram.data-accesses'] = map(sum, zip(results['dram.data-reads'], results['dram.data-writes']))
     results['dram.mac-accesses'] = map(sum, zip(results['dram.mac-reads'], results['dram.mac-writes']))
-    template.append(('  num data accesses', 'dram.data-accesses', str))
+    template.append(('  num data reads', 'dram.data-reads', str))
     template.append(('  num data writes', 'dram.data-writes', str))
     template.append(('  num mac accesses', 'dram.mac-accesses', str))
   
@@ -210,31 +218,23 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     template.append(('  average cxl dram bandwidth (GB/s)', 'cxl-dram.bandwidth', lambda v: '%.2f' % v))
     
     if 'cxl.data-reads' in results:
-      template += ('CXL effective Access', '', '')
+      template += [('CXL effective Access', '', '')]
       results['cxl.data-accesses'] = map(sum, zip(results['cxl.data-reads'], results['cxl.data-writes']))
       results['cxl.mac-accesses'] = map(sum, zip(results['cxl.mac-reads'], results['cxl.mac-writes']))
-      template.append(('  num data accesses', 'cxl.data-accesses', str))
+      template.append(('  num data reads', 'cxl.data-reads', str))
       template.append(('  num data writes', 'cxl.data-writes', str))
       template.append(('  num mac accesses', 'cxl.mac-accesses', str))
     
   
   if 'vv.total-reads' in results:
     results['vv.avg-read-latency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['vv.total-read-delay'], results['vv.total-reads']))
-    results['vv.avg-update-latency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['vv.total-update-delay'], results['vv.total-updates']))
+    results['vv.avg-update-latency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['vv.total-update-latency'], results['vv.total-updates']))
     template += [
       ('VN Vault summary', '', ''),
-      ('  num vn-vault reads', 'vv.reads', str),
+      ('  num vn-vault reads', 'vv.total-reads', str),
       ('  average vn-vault read latency (ns)', 'vv.avg-read-latency', format_ns(2)),
-      ('  num vn-vault updates', 'vv.updates', str),
-      ('  average vn-vault read latency (ns)', 'vv.avg-update-latency', format_ns(2)),
-    ]
-
-  if 'page_table.pages' in results:
-    results['page_table.usage'] = map(lambda a: float(config['system/addr_trans/page_size']) * a / (1024*1024), results['page_table.pages'])
-    template += [
-      ('Page Tabel summary', '', ''),
-      ('  num pages [cxl, dram]', 'page_table.pages', str),
-      ('  usage (GB) [cxl, dram]', 'page_table.usage', lambda v: '%.4f' % v),
+      ('  num vn-vault updates', 'vv.total-updates', str),
+      ('  average vn-vault update latency (ns)', 'vv.avg-update-latency', format_ns(2)),
     ]
     
   # Encrypt and Gen MAC: one AES access + one MAC access. 
@@ -262,16 +262,16 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     template += [ ('MEE MAC Cache', '',''), 
                   ('  num mac access', 'mee.mac', str)]
     if 'mee.mac-misses' in results:
-      results['mee.mac_missrate'] = map(lambda (a,b): float(100)*a/float(b) if b else float('inf'), zip(results['mee.mac_misses'], results['mee.mac']))
+      results['mee.mac-missrate'] = map(lambda (a,b): float(100)*a/float(b) if b else float('inf'), zip(results['mee.mac-misses'], results['mee.mac']))
       template.append(('  num mac misses', 'mee.mac-misses', str))
-      template.append(('  mac cache miss rate', 'mee.mac_missrate', lambda v: '%.2f%%' % v))
+      template.append(('  mac cache miss rate', 'mee.mac-missrate', lambda v: '%.2f%%' % v))
       
     template += [ ('MEE VN Table', '',''), 
                   ('  num vn access', 'mee.vn', str)]
     if 'mee.vn-misses' in results:
-      results['mee.vn_missrate'] = map(lambda (a,b): float(100)*a/float(b) if b else float('inf'), zip(results['mee.vn_misses'], results['mee.vn']))
+      results['mee.vn-missrate'] = map(lambda (a,b): float(100)*a/float(b) if b else float('inf'), zip(results['mee.vn-misses'], results['mee.vn']))
       template.append(('  num vn misses', 'mee.vn-misses', str))
-      template.append(('  vn table miss rate', 'mee.vn_missrate', lambda v: '%.2f%%' % v))
+      template.append(('  vn table miss rate', 'mee.vn-missrate', lambda v: '%.2f%%' % v))
   
   if 'L1-D.loads-where-dram-local' in results:
     results['L1-D.loads-where-dram'] = map(sum, zip(results['L1-D.loads-where-dram-local'], results['L1-D.loads-where-dram-remote']))

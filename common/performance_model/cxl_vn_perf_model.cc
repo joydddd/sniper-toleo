@@ -6,7 +6,7 @@
 #include "shmem_perf.h"
 #include "vv_perf_model.h"
 
-#if 1
+#if 0
 #define MYTRACE_ENABLED
    extern Lock iolock;
 #include "core_manager.h"
