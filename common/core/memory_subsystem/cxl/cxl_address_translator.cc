@@ -192,6 +192,7 @@ IntPtr CXLAddressTranslator::getPhyAddress(IntPtr virtual_address)
 
 IntPtr CXLAddressTranslator::getPPN(IntPtr vpn)
 {
+   ScopedLock l(pt_lock);
    IntPtr ppn = 0;
    auto it_vpn = m_addr_map.find(vpn);
    if (it_vpn == m_addr_map.end()){
@@ -237,7 +238,7 @@ IntPtr CXLAddressTranslator::allocatePage(IntPtr vpn){
 
    IntPtr ppn = (UInt64)(m_last_allocated >= m_num_cxl_devs ? HOST_CXL_ID : m_last_allocated) << MAX_PAGE_NUM_BITS | m_num_allocated_pages[m_last_allocated];
    m_addr_map[vpn] = ppn;
-   MYLOG("[vpn]0x%016lx -> [ppn]0x%016lx", vpn, ppn);
+   fprintf(f_page_table, "[vpn]0x%016lx -> [ppn]0x%016lx\n", vpn, ppn);
 #ifdef MYLOG_ENABLED
    printPageUsage();
 #endif // MYLOG_ENABLED

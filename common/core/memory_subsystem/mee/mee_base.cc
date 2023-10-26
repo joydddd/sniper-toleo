@@ -19,6 +19,6 @@ MEEBase::MEEBase(MemoryManagerBase* memory_manager,
       m_core_id(core_id) {
 
     registerStatsMetric("mee", core_id, "enc-mac", &m_encry_macs);
-    registerStatsMetric("mee", core_id, "dec_verify" , &m_decry_verifys);
-    registerStatsMetric("mee", core_id, "mac-read", &m_mac_reads);
+    registerStatsMetric("mee", core_id, "dec-verify" , &m_decry_verifys);
+    registerStatsMetric("mee", core_id, "vnmac-fetch", &m_mac_reads);
 }

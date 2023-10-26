@@ -6,6 +6,7 @@
 #include <random>
 
 #include "fixed_types.h"
+#include "lock.h"
 
 
 /* 
@@ -37,10 +38,12 @@ class CXLAddressTranslator
    
 
      private:
+
       UInt32 m_num_cxl_devs;
       UInt64 m_dram_size; // in Bytes
       UInt32 m_page_size; // in Bytes
       UInt32 m_page_offset;
+      Lock pt_lock;
 
       bool m_has_mac; // in Bytes
       UInt32 m_mac_per_cl; // number of MACs to fit in one cacheline 

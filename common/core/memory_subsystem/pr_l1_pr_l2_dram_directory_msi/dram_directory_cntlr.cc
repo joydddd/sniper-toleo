@@ -16,6 +16,30 @@
 #  define MYLOG(...) {}
 #endif
 
+#if 0
+#define MYLOG_ENABLED
+extern Lock iolock;
+#include "core_manager.h"
+#include "simulator.h"
+#define MSGLOG(...)                                         \
+    {                                                       \
+        ScopedLock l(iolock);                               \
+        fflush(stderr);                                     \
+        fprintf(stderr, "[tag dir %d]",                     \
+                getMemoryManager()->getCore()->getId());    \
+        fprintf(stderr, __VA_ARGS__);                       \
+        fprintf(stderr, " [msg: %s]\n",                     \
+                itostr(getShmemPerfModel()->getElapsedTime( \
+                           ShmemPerfModel::_SIM_THREAD))    \
+                    .c_str());                              \
+        fprintf(stderr, "\n");                              \
+        fflush(stderr);                                     \
+    }
+#else
+#define MSGLOG(...) \
+    {}
+#endif
+
 namespace PrL1PrL2DramDirectoryMSI
 {
 
@@ -715,6 +739,11 @@ DramDirectoryCntlr::retrieveDataAndSendToL2Cache(ShmemMsg::msg_t reply_msg_type,
             msg_type = PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_READ_REQ;
          }
       }
+      if (reciever_component == MemComponent::DRAM){
+         MSGLOG("0x%12lX send R request to [dram cntlr @%d]", address, dram_node);
+      } else {
+         MSGLOG("0x%12lX send R request to [cxl cntlr @%d]", address, dram_node);
+      }
       getMemoryManager()->sendMsg(msg_type,
             MemComponent::TAG_DIR, reciever_component,
             receiver /* requester */,
@@ -1240,6 +1269,12 @@ DramDirectoryCntlr::sendDataToNUCA(IntPtr address, core_id_t requester, Byte* da
             }
          }
 
+         if (reciever_component == MemComponent::DRAM){
+            MSGLOG("0x%12lX send W request to [dram cntlr @%d]", address, dram_node);
+         } else {
+            MSGLOG("0x%12lX send W request to [cxl cntlr @%d]", address, dram_node);
+         }
+
          getMemoryManager()->sendMsg(msg_type,
                MemComponent::TAG_DIR, reciever_component,
                m_core_id /* requester */,
@@ -1278,6 +1313,12 @@ DramDirectoryCntlr::sendDataToDram(IntPtr address, core_id_t requester, Byte* da
             reciever_component = MemComponent::CXL;
             msg_type = PrL1PrL2DramDirectoryMSI::ShmemMsg::CXL_WRITE_REQ;
          }
+      }
+
+      if (reciever_component == MemComponent::DRAM){
+         MSGLOG("0x%12lX send W request to [dram cntlr @%d]", address, dram_node);
+      } else {
+         MSGLOG("0x%12lX send W request to [cxl cntlr @%d]", address, dram_node);
       }
 
       getMemoryManager()->sendMsg(msg_type,

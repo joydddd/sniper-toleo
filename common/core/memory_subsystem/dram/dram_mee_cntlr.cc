@@ -91,7 +91,6 @@ DramMEECntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_bu
     latency = mac_latency > dram_latency ? mac_latency : dram_latency;
     if (vn_hit_where == HitWhere::CXL_VN){ // vn miss. vn request has already been sent to cxl
         hit_where = HitWhere::CXL_VN;
-        latency = vn_latency;
     } else {
         /* if VN, MAC, salt and cipher are available */
         latency += m_mee->DecryptVerifyData(address, requester, now + latency, perf); // decrypt data and verify MAC
@@ -126,8 +125,13 @@ SubsecondTime DramMEECntlr::handleVNUpdateFromCXL(IntPtr address, core_id_t requ
 
 SubsecondTime DramMEECntlr::handleVNverifyFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
     SubsecondTime mee_latency = m_mee->DecryptVerifyData(address, requester, now, perf);
-    SubsecondTime data_verified_time = now + mee_latency > perf->getLastTime() ? now + mee_latency : perf->getLastTime();
-    MYLOG("[%d]R_FINISH @ %016lx perf last time %ld, mee finish time %ld", requester, address, perf->getLastTime(), now + mee_latency);
+    SubsecondTime dram_time = *((SubsecondTime*)data_buf);
+    // LOG_ASSERT_ERROR(now + mee_latency > dram_time,
+    //                  "0x%012lX now %s, mee_latency %s, dram_time %s\n", address,
+    //                  itostr(now).c_str(), itostr(mee_latency).c_str(),
+    //                  itostr(dram_time).c_str());
+    SubsecondTime data_verified_time = now + mee_latency > dram_time ? now + mee_latency : dram_time;
+    MYLOG("[%d]R_FINISH @ %016lx darm time %ld, mee finish time %ld", requester, address, dram_time, now + mee_latency);
     return data_verified_time - now;
 }
 

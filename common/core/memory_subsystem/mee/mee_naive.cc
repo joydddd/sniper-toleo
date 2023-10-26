@@ -50,6 +50,7 @@ MEENaive::MEENaive(MemoryManagerBase *memory_manager,
     "perf_model/mee/cache/data_access_time", m_core_id));
 
     registerStatsMetric("mee", m_core_id, "mac-misses", &m_mac_misses);
+    registerStatsMetric("mee", m_core_id, "vn-misses", &m_vn_misses);
 
     m_mac_cache = new Cache(
         "mac-cache", "perf_model/mee/cache", m_core_id, 
@@ -70,7 +71,6 @@ MEENaive::MEENaive(MemoryManagerBase *memory_manager,
                            m_vn_table_entries, 1, getCacheBlockSize() * m_vn_per_entry, "lru",
                            CacheBase::PR_L1_CACHE, CacheBase::HASH_MOD);
 
-    registerStatsMetric("mee", m_core_id, "vn-misses", &m_vn_misses);
 #ifdef MYLOG_ENABLED
     std::ostringstream trace_filename;
     trace_filename << "mee_cntlr_" << m_core_id << ".trace";
@@ -212,6 +212,8 @@ MEENaive::fetchMACVN(IntPtr address, core_id_t requester, SubsecondTime now,
     
     boost::tie(mac_latency, mac_hit_where) = accessMAC(address, Cache::LOAD, requester, now, perf);
     boost::tie(vn_latency, vn_hit_where) = lookupVN(address, requester, now, perf);
+
+    m_mac_reads++;
 
     return boost::make_tuple<SubsecondTime, SubsecondTime, HitWhere::where_t>(
         mac_latency, vn_latency,
