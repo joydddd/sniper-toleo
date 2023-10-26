@@ -49,12 +49,12 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
 
    if (dram_type == DramType::SYSTEM_DRAM) {
       registerStatsMetric("dram", core_id, "total-access-latency", &m_total_access_latency);
-      registerStatsMetric("dram", core_id, "total-read-latenc", &m_total_read_latency);
-   } else if (dram_type == DramType::CXL_MEMORY){
+      registerStatsMetric("dram", core_id, "total-read-latency", &m_total_read_latency);
+   } else if (dram_type == DramType::CXL_MEMORY || dram_type == DramType::CXL_VN){
       registerStatsMetric("cxl-dram", core_id, "total-access-latency", &m_total_access_latency);
-      registerStatsMetric("cxl-dram", core_id, "total-read-latenc", &m_total_read_latency);
+      registerStatsMetric("cxl-dram", core_id, "total-read-latency", &m_total_read_latency);
    } else {
-      std::cerr << "Unsupported dram type " << dram_type << std::endl;
+       std::cerr << "Unsupported dram type " << dram_type << std::endl;
    }
 #ifdef MYTRACE_ENABLED
    std::ostringstream trace_filename;

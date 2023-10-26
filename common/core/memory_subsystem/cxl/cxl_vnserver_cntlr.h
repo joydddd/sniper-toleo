@@ -23,7 +23,8 @@ class CXLVNServerCntlr : public CXLCntlrInterface
      UInt64 m_vn_length, m_cxl_pkt_size;
      UInt64 m_vn_reads, m_vn_updates;
      UInt64 *m_data_reads, *m_data_writes; // cxl data reads and write
-     UInt64 *m_mac_reads, *m_mac_writes; // cxl memory expander reads and writes due to mac access. 
+     UInt64 *m_mac_reads, *m_mac_writes; // cxl memory expander reads and writes due to mac access.
+     SubsecondTime *m_total_read_delay; // cxl device total read delay for data accesses. 
 
      CXLPerfModel* m_vn_perf_model;
      CXLCntlr* m_cxl_cntlr;

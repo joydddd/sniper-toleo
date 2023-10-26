@@ -9,12 +9,13 @@ class ShmemPerf;
 class VVPerfModel {
     protected:
      bool m_enabled;
+     UInt64 m_dram_reads, m_dram_writes;
      UInt64 m_num_reads, m_num_updates;
      FILE* f_trace;
     public:
      static VVPerfModel* createVVPerfModel(cxl_id_t cxl_id, UInt32 vn_size); // version number length in bits
 
-     VVPerfModel(UInt32 vn_size) : m_enabled(false), m_num_reads(0), m_num_updates(0) {}
+     VVPerfModel(UInt32 vn_size) : m_enabled(false), m_dram_reads(0), m_dram_writes(0), m_num_reads(0), m_num_updates(0) {}
      virtual ~VVPerfModel() {}
 
      /* return Access latency and pkt size */

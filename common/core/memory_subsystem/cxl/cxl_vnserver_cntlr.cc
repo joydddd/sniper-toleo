@@ -30,6 +30,7 @@ CXLVNServerCntlr::CXLVNServerCntlr(
     m_vn_updates(0),
     m_data_reads(NULL), m_data_writes(NULL),
     m_mac_reads(NULL), m_mac_writes(NULL),
+    m_total_read_delay(NULL),
     m_cxl_cntlr(cxl_cntlr),
     f_trace(NULL),
     m_enable_trace(false)
@@ -53,6 +54,7 @@ CXLVNServerCntlr::CXLVNServerCntlr(
    memset(m_mac_reads, 0, sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
    m_mac_writes = (UInt64*) malloc(sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
    memset(m_mac_writes, 0, sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
+   m_total_read_delay = (SubsecondTime*)malloc(sizeof(SubsecondTime)*cxl_address_tranlator->getnumCXLDevices());
    for (cxl_id_t cxl_id = 0; cxl_id < cxl_address_tranlator->getnumCXLDevices();
         cxl_id++) {
        if (m_cxl_cntlr->m_cxl_connected[cxl_id]) {
@@ -64,6 +66,9 @@ CXLVNServerCntlr::CXLVNServerCntlr(
                                &m_mac_reads[cxl_id]);
            registerStatsMetric("cxl", cxl_id, "mac-writes",
                                &m_mac_writes[cxl_id]);
+         m_total_read_delay[cxl_id] = SubsecondTime::Zero();
+         registerStatsMetric("cxl", cxl_id, "total-effective-read-latency",
+                             &m_total_read_delay[cxl_id]);
        }
    }
 
@@ -85,6 +90,7 @@ CXLVNServerCntlr::~CXLVNServerCntlr()
    if (m_data_writes) free(m_data_writes);
    if (m_mac_reads) free(m_mac_reads);
    if (m_mac_writes) free(m_mac_writes);
+   if (m_total_read_delay) free(m_total_read_delay);
    if (m_vn_perf_model) delete m_vn_perf_model;
 #ifdef MYLOG_ENABLED
    fclose(f_trace);
@@ -160,6 +166,7 @@ CXLVNServerCntlr::getDataFromCXL(IntPtr address, core_id_t requester, Byte* data
    latency += decrypt_latency;
    
    ++m_data_reads[cxl_id];
+   m_total_read_delay[cxl_id] += latency;
    MYLOG("[%d]R @ %016lx latency %s", requester, address, itostr(latency.getNS()).c_str());
    return boost::make_tuple(latency, hit_where);
 }

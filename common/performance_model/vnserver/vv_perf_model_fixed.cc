@@ -31,10 +31,10 @@ VVPerfModelFixed::VVPerfModelFixed(cxl_id_t cxl_id, UInt32 vn_size)
         fprintf(stderr, "Create Dram perf model from vvperfmodel, cxl_id %d\n", cxl_id);
     m_dram_perf_model = DramPerfModel::createDramPerfModel(cxl_id, m_entry_size/8, DramType::CXL_VN);
 
-    registerStatsMetric("vv", cxl_id, "total-reads", &m_num_reads);
-    registerStatsMetric("vv", cxl_id, "total-updates", &m_num_updates);
     registerStatsMetric("vv", cxl_id, "total-read-delay", &m_total_read_delay);
     registerStatsMetric("vv", cxl_id, "total-update-latency", &m_total_update_latency);
+    registerStatsMetric("vv", cxl_id, "dram-reads", &m_dram_reads);
+    registerStatsMetric("vv", cxl_id, "dram-writes", &m_dram_writes);
 
 #ifdef MYTRACE_ENABLED
    f_trace = fopen("vv_perf.trace", "w+");
@@ -61,21 +61,23 @@ boost::tuple<SubsecondTime, UInt64> VVPerfModelFixed::getAccessLatency(
         return boost::make_tuple<SubsecondTime, UInt64>(SubsecondTime::Zero(),  m_entry_size);
 
     SubsecondTime m_dram_latency = m_dram_perf_model->getAccessLatency(pkt_time, m_entry_size, requester, address, DramCntlrInterface::READ, perf);
-    if (access_type == CXLCntlrInterface::VN_UPDATE){
+    m_dram_reads++;
+    if (access_type == CXLCntlrInterface::VN_UPDATE) {
         // write after read for vn updates
         m_dram_perf_model->getAccessLatency(pkt_time + m_dram_latency, m_entry_size, requester, address, DramCntlrInterface::WRITE, perf);
+        m_dram_writes++;
     }
     SubsecondTime access_latency = m_dram_latency;
     switch(access_type){
         case CXLCntlrInterface::VN_READ:
             MYTRACE("0x%016lx\tREAD\t%lu", address, access_latency.getNS());
-            m_num_reads++;
             m_total_read_delay += access_latency;
+            m_num_reads++;
             break;
         case CXLCntlrInterface::VN_UPDATE:
             MYTRACE("0x%016lx\tUPDATE\t%lu", address, access_latency.getNS());
-            m_num_updates++;
             m_total_update_latency += access_latency;
+            m_num_updates++;
             break;
         default:
             LOG_ASSERT_ERROR(false, "Unsupported access type %d on VV", access_type);
