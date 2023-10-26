@@ -44,7 +44,7 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
    /* Initilize DRAMsim3 simulator */
    m_dramsim = (DRAMsimCntlr**)malloc(sizeof(DRAMsimCntlr*) * m_dramsim_channels);
    for (UInt32 ch_id = 0; ch_id < m_dramsim_channels; ch_id++){
-      m_dramsim[ch_id] = new DRAMsimCntlr(core_id, ch_id, m_dram_access_cost);
+      m_dramsim[ch_id] = new DRAMsimCntlr(core_id, ch_id, m_dram_access_cost, dram_type != DramType::SYSTEM_DRAM);
    }
 
    if (dram_type == DramType::SYSTEM_DRAM) {

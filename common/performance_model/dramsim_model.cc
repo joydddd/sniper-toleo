@@ -30,8 +30,8 @@
 #endif
 
 DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, SubsecondTime default_latency, bool is_cxl, bool _log_trace):
-   epoch_size(is_cxl ? Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dramsim/epoch") : Sim()->getCfg()->getInt("perf_model/dram/dramsim/epoch")),
-   dram_period(is_cxl ? ComponentPeriod::fromFreqHz(Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dramsim/frequency") * 1000000) 
+   epoch_size(is_cxl ? Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dram/dramsim/epoch") : Sim()->getCfg()->getInt("perf_model/dram/dramsim/epoch")),
+   dram_period(is_cxl ? ComponentPeriod::fromFreqHz(Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dram/dramsim/frequency") * 1000000) 
    : ComponentPeriod::fromFreqHz(Sim()->getCfg()->getFloat("perf_model/dram/dramsim/frequency") * 1000000)), // MHz to Hz
    epoch_period(epoch_size * dram_period.getPeriod()),
    ch_id(_ch_id),
@@ -46,9 +46,9 @@ DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, SubsecondTi
    clk_latest_req_(0),
    f_trace(NULL)
 {
-   std::string config(is_cxl ? Sim()->getCfg()->getString("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dramsim/config").c_str() 
+   std::string config(is_cxl ? Sim()->getCfg()->getString("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dram/dramsim/config").c_str() 
                               :Sim()->getCfg()->getString("perf_model/dram/dramsim/config").c_str());
-   std::string output_dir(is_cxl ? Sim()->getCfg()->getString("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dramsim/output_dir").c_str()
+   std::string output_dir(is_cxl ? Sim()->getCfg()->getString("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dram/dramsim/output_dir").c_str()
                                  :Sim()->getCfg()->getString("perf_model/dram/dramsim/output_dir").c_str());
    if (is_cxl) output_dir.append("/dramsim_cxl" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id));
    else  output_dir.append("/dramsim_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id));
@@ -61,9 +61,12 @@ DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, SubsecondTi
    read_lat_generator.add_latency(default_latency);
 
 #ifdef MYTRACE_ENABLED
-   if (log_trace){
-    f_trace = fopen(("dramsim_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".trace").c_str(), "w+");
-    f_callback_trace = fopen(("dramsim_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".callback.trace").c_str(), "w+");
+   if (log_trace && is_cxl){
+    f_trace = fopen(("dramsim_cxl_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".trace").c_str(), "w+");
+    f_callback_trace = fopen(("dramsim_cxl_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".callback.trace").c_str(), "w+");
+   } else if (log_trace){
+      f_trace = fopen(("dramsim_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".trace").c_str(), "w+");
+      f_callback_trace = fopen(("dramsim_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".callback.trace").c_str(), "w+");
    }
 #endif
 }
@@ -122,6 +125,7 @@ SubsecondTime DRAMsimCntlr::addTrans(SubsecondTime t_sniper, IntPtr addr, bool i
    if (t_sniper < t_start_ && sim_status_ == SIM_WARMUP) return read_lat_generator.get_latency(); // skip if request is too early
    LOG_ASSERT_ERROR(t_sniper >= t_start_, "DRAM Request too early: t_sniper %ld, t_start %ld", t_sniper.getNS(), t_start_.getNS());
    uint64_t req_clk =  (t_sniper - t_start_).getInternalDataForced() / dram_period.getPeriod().getInternalDataForced();
+   if (req_clk < clk_ && sim_status_ == SIM_WARMUP) return read_lat_generator.get_latency(); // skip if request is too early
    LOG_ASSERT_ERROR(req_clk >= clk_, "DRAM Request outside of Epoch: req_clk %ld, clk_ %ld", req_clk, clk_);
    t_latest_req_ = t_sniper > t_latest_req_ ? t_sniper : t_latest_req_;
    clk_latest_req_ = req_clk > clk_latest_req_ ? req_clk : clk_latest_req_;
@@ -142,10 +146,10 @@ void DRAMsimCntlr::advance(SubsecondTime t_barrier){
       status_ = DRAMSIM_RUNNING;
       fprintf(stderr, "[DRAMSIM #%d] First Barrier at %ld ns, clk %lu\n", ch_id, t_barrier.getNS(), clk_);
    }
-   if (status_ == DRAMSIM_RUNNING){ // run DRAMsim
+   if (status_ == DRAMSIM_RUNNING){ // run DRAMsim/
       uint64_t barrier_clk =  (t_barrier - t_start_).getInternalDataForced() / dram_period.getPeriod().getInternalDataForced();
       read_lat_generator.newEpoch();
-      runDRAMsim(barrier_clk);
+      runDRAMsim(barrier_clk > epoch_size ? barrier_clk - epoch_size : 0);
       // fprintf(stderr, "[DRAMSIM #%d] Barrier at %ld ns, clk %lu\n", ch_id, t_barrier.getNS(), barrier_clk);
    }
 }
