@@ -212,8 +212,11 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     
   
     # Dram perfomance summary on CXL expander
-    results['vv.dram-accesses'] = map(sum, zip(results['vv.dram-reads'], results['vv.dram-writes']))
-    results['cxl-dram.accesses'] = map(lambda (a,b): a if a>0 else b, zip(results['vv.dram-accesses'], results['cxl.accesses']))
+    if 'vv.dram-reads' in results:
+      results['vv.dram-accesses'] = map(sum, zip(results['vv.dram-reads'], results['vv.dram-writes']))
+      results['cxl-dram.accesses'] = map(lambda (a,b): a if a>0 else b, zip(results['vv.dram-accesses'], results['cxl.accesses']))
+    else:
+      results['cxl-dram.accesses'] = results['cxl.accesses']
     results['cxl-dram.avglatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['cxl-dram.total-access-latency'], results['cxl-dram.accesses']))
     template += [
       ('  CXL DRAM summary', '', ''),
