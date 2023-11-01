@@ -29,10 +29,12 @@
 #define CALLBACKTRACE(...) {}
 #endif
 
-DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, SubsecondTime default_latency, bool is_cxl, bool _log_trace):
-   epoch_size(is_cxl ? Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dram/dramsim/epoch") : Sim()->getCfg()->getInt("perf_model/dram/dramsim/epoch")),
-   dram_period(is_cxl ? ComponentPeriod::fromFreqHz(Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dram/dramsim/frequency") * 1000000) 
-   : ComponentPeriod::fromFreqHz(Sim()->getCfg()->getFloat("perf_model/dram/dramsim/frequency") * 1000000)), // MHz to Hz
+DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, SubsecondTime default_latency, DramType dram_type, bool _log_trace):
+   config_prefix(dram_type == DramType::SYSTEM_DRAM ? "perf_model/dram/dramsim/"
+                : dram_type == DramType::CXL_MEMORY ? "perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dram/dramsim/" 
+                : "perf_model/cxl/vnserver/dram/dramsim/"),
+   epoch_size(Sim()->getCfg()->getInt(config_prefix + "epoch")),
+   dram_period(ComponentPeriod::fromFreqHz(Sim()->getCfg()->getFloat( config_prefix + "frequency") * 1000000)),// MHz to Hz
    epoch_period(epoch_size * dram_period.getPeriod()),
    ch_id(_ch_id),
    dram_cntlr_id(_dram_cntlr_id),
@@ -46,11 +48,10 @@ DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, SubsecondTi
    clk_latest_req_(0),
    f_trace(NULL)
 {
-   std::string config(is_cxl ? Sim()->getCfg()->getString("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dram/dramsim/config").c_str() 
-                              :Sim()->getCfg()->getString("perf_model/dram/dramsim/config").c_str());
-   std::string output_dir(is_cxl ? Sim()->getCfg()->getString("perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dram/dramsim/output_dir").c_str()
-                                 :Sim()->getCfg()->getString("perf_model/dram/dramsim/output_dir").c_str());
-   if (is_cxl) output_dir.append("/dramsim_cxl" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id));
+   std::string config(Sim()->getCfg()->getString(config_prefix + "config").c_str());
+   std::string output_dir(Sim()->getCfg()->getString(config_prefix + "output_dir").c_str());
+   if (dram_type == DramType::CXL_MEMORY || dram_type == DramType::CXL_VN) 
+      output_dir.append("/dramsim_cxl" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id));
    else  output_dir.append("/dramsim_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id));
    std::system(("mkdir -p " + output_dir).c_str());
 
@@ -61,7 +62,7 @@ DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, SubsecondTi
    read_lat_generator.add_latency(default_latency);
 
 #ifdef MYTRACE_ENABLED
-   if (log_trace && is_cxl){
+   if (log_trace && (dram_type == DramType::CXL_MEMORY || dram_type == DramType::CXL_VN)){
     f_trace = fopen(("dramsim_cxl_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".trace").c_str(), "w+");
     f_callback_trace = fopen(("dramsim_cxl_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".callback.trace").c_str(), "w+");
    } else if (log_trace){

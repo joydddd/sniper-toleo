@@ -5,6 +5,7 @@
 #include "subsecond_time.h"
 #include "inst_mode.h"
 #include "memory_system.h" // DRAMsim3
+#include "dram_perf_model.h"
 #include <map>
 
 class DramPerfModelDramSim;
@@ -12,7 +13,8 @@ class DramPerfModelDramSim;
 
 class DRAMsimCntlr {
    private:
-    uint64_t epoch_size; // cycles in one epoch
+    String config_prefix;
+    uint64_t epoch_size;  // cycles in one epoch
     ComponentPeriod dram_period;
     SubsecondTime epoch_period;// period of one epoch
     uint32_t ch_id, dram_cntlr_id;
@@ -67,7 +69,7 @@ class DRAMsimCntlr {
     void WriteCallBack(uint64_t addr);
     void runDRAMsim(uint64_t target_cycle);
    public:
-      DRAMsimCntlr(uint32_t dram_cntlr_id, uint32_t ch_id, SubsecondTime default_latency, bool is_cxl = false, bool log_trace = false);
+      DRAMsimCntlr(uint32_t dram_cntlr_id, uint32_t ch_id, SubsecondTime default_latency, DramType dram_type = DramType::SYSTEM_DRAM, bool log_trace = false);
       ~DRAMsimCntlr();
       void start(InstMode::inst_mode_t sim_status = InstMode::DETAILED);
       void stop();

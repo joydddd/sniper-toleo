@@ -34,7 +34,9 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
    m_dramsim(NULL),
    m_dramsim_channels(dram_type == DramType::SYSTEM_DRAM ? 
                      Sim()->getCfg()->getInt("perf_model/dram/dramsim/channles_per_contoller") :
-                     Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_" + itostr((unsigned int)core_id) + "/dram/dramsim/channles_per_contoller"))
+                     dram_type == DramType::CXL_MEMORY ?
+                     Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_" + itostr((unsigned int)core_id) + "/dram/dramsim/channles_per_contoller") :
+                     Sim()->getCfg()->getInt("perf_model/cxl/vnserver/dram/dramsim/channles_per_contoller"))
    
 {
    Sim()->getHooksManager()->registerHook(HookType::HOOK_INSTRUMENT_MODE, DramPerfModelDramSim::Change_mode_HOOK, (UInt64)this);
@@ -44,7 +46,7 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
    /* Initilize DRAMsim3 simulator */
    m_dramsim = (DRAMsimCntlr**)malloc(sizeof(DRAMsimCntlr*) * m_dramsim_channels);
    for (UInt32 ch_id = 0; ch_id < m_dramsim_channels; ch_id++){
-      m_dramsim[ch_id] = new DRAMsimCntlr(core_id, ch_id, m_dram_access_cost, dram_type != DramType::SYSTEM_DRAM);
+      m_dramsim[ch_id] = new DRAMsimCntlr(core_id, ch_id, m_dram_access_cost, dram_type);
    }
 
    if (dram_type == DramType::SYSTEM_DRAM) {

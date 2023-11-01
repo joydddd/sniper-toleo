@@ -199,7 +199,7 @@ SubsecondTime CXLVNServerCntlr::getVNFromCXL(IntPtr address, core_id_t requester
 }
 
 SubsecondTime CXLVNServerCntlr::updateVNToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
-   return updateVN(address, requester, now, NULL);
+   return updateVN(address, requester, now, &m_dummy_shmem_perf);
 }
 
 void CXLVNServerCntlr::enablePerfModel() 

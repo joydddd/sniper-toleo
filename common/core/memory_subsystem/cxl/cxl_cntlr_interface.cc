@@ -99,8 +99,7 @@ void CXLCntlrInterface::handleMsgFromDram(core_id_t sender, PrL1PrL2DramDirector
          IntPtr address = shmem_msg->getAddress();
          Byte data_buf[getVNBlockSize()];
 
-         SubsecondTime dram_time;
-         memcpy(&dram_time, shmem_msg->getDataBuf(), sizeof(SubsecondTime));
+         SubsecondTime dram_time = *((SubsecondTime*)shmem_msg->getDataBuf());
 
          MYLOG("[cxl] 0x%012lX handle VN REQ. dram time %lu", address, dram_time.getNS());
          SubsecondTime vn_access_latency = getVNFromCXL(address, shmem_msg->getRequester(), data_buf, msg_time, shmem_msg->getPerf());
