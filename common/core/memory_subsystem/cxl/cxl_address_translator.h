@@ -23,9 +23,15 @@ class CXLAddressTranslator
       // Return core node with cxl cntlr for given CXL device
       core_id_t getCntlrHome(cxl_id_t cxl_id);
       // Within cxl node, return unique, incrementing block number
-      IntPtr getLinearPage(IntPtr address);
+      IntPtr getPhyPage(IntPtr address);
       // Within cxl node, return unique, incrementing address to be used in cache set selection
       IntPtr getPhyAddress(IntPtr address);
+      // Within the system, return unique, incrementing block number
+      IntPtr getLinearPage(IntPtr address);
+      // Within the system, return unique, incrementing address to be used for VV. 
+      IntPtr getLinearAddress(IntPtr address);
+      // Return total number of physical pages on this system
+      UInt64 getTotalPageCount();
 
       UInt32 getnumCXLDevices() { return m_num_cxl_devs; }
 

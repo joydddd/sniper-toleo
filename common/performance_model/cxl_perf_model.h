@@ -20,7 +20,7 @@ class CXLPerfModel
 
 
      public:
-      static CXLPerfModel* createCXLPerfModel(cxl_id_t cxl_id, UInt64 transaction_size, bool is_vn = false);
+      static CXLPerfModel* createCXLPerfModel(cxl_id_t cxl_id, UInt64 transaction_size, void* vv_cntlr = NULL);
       CXLPerfModel(cxl_id_t cxl_id, UInt64 transaction_size /* in bits */) : m_enabled(false), m_num_accesses(0),  m_transaction_size_bytes(transaction_size / 8), m_cxl_id(cxl_id) {}
       virtual ~CXLPerfModel() {}
       virtual SubsecondTime getAccessLatency(

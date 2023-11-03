@@ -13,6 +13,7 @@
 #include "mee_base.h"
 #include "memory_manager_base.h"
 #include "subsecond_time.h"
+#include "vv_cntlr.h"
 #include <vector>
 
 
@@ -28,6 +29,7 @@ class CXLVNServerCntlr : public CXLCntlrInterface
 
      CXLPerfModel* m_vn_perf_model;
      CXLCntlr* m_cxl_cntlr;
+     VVCntlr* m_vv_cntlr;
      std::vector<MEEBase*> m_mee;
 
      FILE* f_trace;

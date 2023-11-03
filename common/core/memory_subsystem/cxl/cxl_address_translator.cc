@@ -14,7 +14,7 @@
 #define ONE_M  (float)1000*1000
 
 // DEBUG:
-#if 0
+#if 1
 #  define MYLOG_ENABLED
    extern Lock iolock;
 #  include "core_manager.h"
@@ -177,7 +177,7 @@ core_id_t CXLAddressTranslator::getCntlrHome(cxl_id_t cxl_id)
    return m_cxl_cntlr_core_list[cxl_id];
 }
 
-IntPtr CXLAddressTranslator::getLinearPage(IntPtr address)
+IntPtr CXLAddressTranslator::getPhyPage(IntPtr address)
 {
    return getPPN(address >> m_page_offset ) & (((IntPtr)1 << MAX_PAGE_NUM_BITS) - 1);
 }
@@ -185,9 +185,35 @@ IntPtr CXLAddressTranslator::getLinearPage(IntPtr address)
 IntPtr CXLAddressTranslator::getPhyAddress(IntPtr virtual_address)
 {
    IntPtr phy_addr; 
-   phy_addr =  getLinearPage(virtual_address) << m_page_offset | (virtual_address & (((IntPtr)1 << m_page_offset) - 1));
+   phy_addr =  getPhyPage(virtual_address) << m_page_offset | (virtual_address & (((IntPtr)1 << m_page_offset) - 1));
    MYLOG("Linear addr: 0x%016lx -> 0x%016lx\n", virtual_address, phy_addr);
    return phy_addr;
+}
+
+IntPtr CXLAddressTranslator::getLinearPage(IntPtr v_addr) {
+    cxl_id_t home_cxl_id = getHome(v_addr);
+    IntPtr m_page_offset = 0;
+    for (cxl_id_t cxl_id = 0;
+         cxl_id < home_cxl_id == HOST_CXL_ID ? m_num_cxl_devs : home_cxl_id;
+         cxl_id++) {
+      m_page_offset += m_mac_offset[m_num_cxl_devs] >> m_page_offset;
+    }
+    IntPtr linear_ppn = getPhyPage(v_addr) + m_page_offset;
+    fprintf(stderr, "0x%12lX Home %d, offset %lu, linear page num %lu\n", v_addr, home_cxl_id, linear_ppn);
+
+    return linear_ppn;
+}
+
+IntPtr CXLAddressTranslator::getLinearAddress(IntPtr v_addr){
+   return getLinearPage(v_addr) << m_page_offset | (v_addr & (((IntPtr)1 << m_page_offset) - 1));
+}
+
+UInt64 CXLAddressTranslator::getTotalPageCount(){
+   UInt64 page_count = 0;
+   for (cxl_id_t cxl_id = 0; cxl_id < getnumCXLDevices(); cxl_id++){
+      page_count += m_mac_offset[cxl_id] / m_page_size;
+   }
+   return page_count;
 }
 
 IntPtr CXLAddressTranslator::getPPN(IntPtr vpn)

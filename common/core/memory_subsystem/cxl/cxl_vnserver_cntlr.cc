@@ -41,7 +41,9 @@ CXLVNServerCntlr::CXLVNServerCntlr(
       m_mee[cxl_id] = new MEENaive(memory_manager, shmem_perf_model, m_address_translator, cxl_id, cache_block_size, this);
    }
 
-   m_vn_perf_model = CXLPerfModel::createCXLPerfModel(cxl_address_tranlator->getnumCXLDevices(), m_cxl_pkt_size, true);
+   VVCntlr* m_vv_cntlr = new VVCntlr(cxl_address_tranlator);
+   m_vn_perf_model = CXLPerfModel::createCXLPerfModel(cxl_address_tranlator->getnumCXLDevices(), m_cxl_pkt_size, m_vv_cntlr);
+   
    registerStatsMetric("cxl", cxl_address_tranlator->getnumCXLDevices(), "reads", &m_vn_reads);
    registerStatsMetric("cxl", cxl_address_tranlator->getnumCXLDevices(), "writes", &m_vn_updates);
    
@@ -92,6 +94,7 @@ CXLVNServerCntlr::~CXLVNServerCntlr()
    if (m_mac_writes) free(m_mac_writes);
    if (m_total_read_delay) free(m_total_read_delay);
    if (m_vn_perf_model) delete m_vn_perf_model;
+   if (m_vv_cntlr) delete m_vv_cntlr;
 #ifdef MYLOG_ENABLED
    fclose(f_trace);
 #endif // MYLOG_ENABLED
@@ -99,7 +102,8 @@ CXLVNServerCntlr::~CXLVNServerCntlr()
 
 
 SubsecondTime CXLVNServerCntlr::getVN(IntPtr address, core_id_t requester, SubsecondTime now, ShmemPerf *perf){
-   SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, 0, requester, address, CXLCntlrInterface::VN_READ, perf);
+   IntPtr linear_address = m_address_translator->getLinearAddress(address);
+   SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, 0, requester, linear_address, CXLCntlrInterface::VN_READ, perf);
 
    ++m_vn_reads;
    MYLOG("[%d]getVN @ %016lx latency %s", requester, address, itostr(cxl_latency.getNS()).c_str());
@@ -109,7 +113,8 @@ SubsecondTime CXLVNServerCntlr::getVN(IntPtr address, core_id_t requester, Subse
 
 
 SubsecondTime CXLVNServerCntlr::updateVN(IntPtr address, core_id_t requester, SubsecondTime now, ShmemPerf *perf){
-    SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, 0, requester, address, CXLCntlrInterface::VN_UPDATE, perf);
+   IntPtr linear_address = m_address_translator->getLinearAddress(address);
+   SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, 0, requester, linear_address, CXLCntlrInterface::VN_UPDATE, perf);
 
    ++m_vn_updates;
    MYLOG("[%d]UpdateVN @ %016lx latency %s", requester, address, itostr(cxl_latency.getNS()).c_str());

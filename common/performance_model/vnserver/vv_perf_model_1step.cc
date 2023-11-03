@@ -25,57 +25,10 @@
 
 
 
-#define VAULT_PRIVATE_MAX 127
-#define PAGE_OFFSET 12 // 4KB page (64 CLs)
-#define PAGE_SIZE 4096 // 4KB page (64 CLs)
-#define CACHE_LINE_OFFSET 6 // 64B cache line
-#define VN_ENTRY_SIZE 16 // in bytes
-
-VN_Page::vn_comp_t VN_Page::update(UInt8 cl_num){
-    switch (type){
-        case ONE_STEP:
-            ++vn_private[cl_num];
-            if (vn_private[cl_num] > 1) type = VAULT;
-            break;
-        case VAULT:
-            ++vn_private[cl_num];
-            if (vn_private[cl_num] >= VAULT_PRIVATE_MAX) type = OVERFLOW;
-            break;
-        case OVERFLOW:
-            ++vn_private[cl_num];
-            break;
-    }
-    m_total_offset++;
-    if (type == ONE_STEP && m_total_offset == 64) { // rollover one step pages if they are uniform now
-        m_total_offset = 0;
-        for (int i = 0; i < 64; i++) vn_private[i] = 0;
-    }
-    return type;
-}
-
-UInt32 VN_Page::reset(){
-    UInt32 ret = m_total_offset;
-    
-    if (type == ONE_STEP) {
-        ret = m_total_offset == 0 ? 0 : 64 - m_total_offset; // pages that are not written to need a forced update
-    }
-    if (type == VAULT || type == OVERFLOW) {
-        ret = 64;
-        return 64;
-    }
-
-    m_total_offset = 0;
-    type = ONE_STEP;
-    for (int i = 0; i < 64; i++) vn_private[i] = 0;
-    return ret;
-}
-
-
-
-
-VVPerfModel1Step::VVPerfModel1Step(cxl_id_t cxl_id, UInt32 vn_size)
+VVPerfModel1Step::VVPerfModel1Step(cxl_id_t cxl_id, UInt32 vn_size, VVCntlr* vv_cntlr)
     : VVPerfModel(vn_size),
     m_dram_perf_model(NULL),
+    m_vv_cntlr(vv_cntlr),
     m_total_read_delay(SubsecondTime::Zero()),
     m_total_update_latency(SubsecondTime::Zero())
     {
@@ -113,18 +66,14 @@ boost::tuple<SubsecondTime, UInt64> VVPerfModel1Step::getAccessLatency(
 
 
     // get Vault Page Type
-    VN_Page::vn_comp_t vn_page_type = VN_Page::vn_comp_t::ONE_STEP;
-    IntPtr page_num = address >> PAGE_OFFSET;
-    UInt8 cl_num = (address & (PAGE_SIZE - 1)) >> CACHE_LINE_OFFSET;
-    auto page_it = m_vault_pages.find(page_num);
-    if (page_it != m_vault_pages.end()) { // if page exists. 
-       vn_page_type = page_it->second.get_type();
-    } 
+    VN_Page::vn_comp_t vn_page_type;
+    IntPtr vn_1step_entry_addr, vn_entry_addr; // address of the entry
+    boost::tie(vn_page_type, vn_1step_entry_addr, vn_entry_addr) = m_vv_cntlr->getVNEntry(address);
 
     // read pointer if this is not a one-step page
     SubsecondTime dram_latency = SubsecondTime::Zero();
     if (vn_page_type != VN_Page::vn_comp_t::ONE_STEP){ // get entry address if not one-step page
-        dram_latency += m_dram_perf_model->getAccessLatency(pkt_time, VN_ENTRY_SIZE, requester, address, DramCntlrInterface::READ, perf);
+        dram_latency += m_dram_perf_model->getAccessLatency(pkt_time, VN_ENTRY_SIZE, requester, vn_1step_entry_addr, DramCntlrInterface::READ, perf);
         m_dram_reads++;
     }
 
@@ -132,29 +81,35 @@ boost::tuple<SubsecondTime, UInt64> VVPerfModel1Step::getAccessLatency(
     SubsecondTime dram_latency_max = SubsecondTime::Zero(); // max latency of all transactions
     for (int size_read = 0; size_read < (UInt64)vn_page_type; size_read += VN_ENTRY_SIZE){
         SubsecondTime dram_lat_trans = m_dram_perf_model->getAccessLatency(
-            pkt_time + dram_latency, VN_ENTRY_SIZE, requester, address,
+            pkt_time + dram_latency, VN_ENTRY_SIZE, requester, vn_entry_addr + size_read,
             DramCntlrInterface::READ, perf);
         dram_latency_max = dram_latency_max > dram_lat_trans ? dram_latency_max : dram_lat_trans;
+        m_dram_reads++;
     }
     dram_latency += dram_latency_max;
-    m_dram_reads++;
+
     // update only the dirty entry if neccessary 
     if (access_type == CXLCntlrInterface::VN_UPDATE) {
-        // if page doesn't exist, create it
-        if (page_it == m_vault_pages.end())
-            page_it = m_vault_pages.insert(std::make_pair(page_num, VN_Page())).first;
+        VN_Page::vn_comp_t new_page_type;
+        boost::tie(new_page_type, vn_entry_addr) = m_vv_cntlr->updateVNEntry(address);
 
-        // write after read for vn updates
-        m_dram_perf_model->getAccessLatency(pkt_time + dram_latency, VN_ENTRY_SIZE, requester, address, DramCntlrInterface::WRITE, perf);
-        m_dram_writes++;
+       
 
-        // update the page
-        VN_Page::vn_comp_t new_page_type = page_it->second.update(cl_num);
-        if (new_page_type != vn_page_type){ // if we are allocating new entry for this page
-            m_vault_pages[page_num] = VN_Page();
+
+        // if we are allocating new entry for this page
+        if (new_page_type != vn_page_type){
             vn_page_type = new_page_type;
-            for (int size_read = 0; size_read < (UInt64)vn_page_type; size_read += VN_ENTRY_SIZE)
-                m_dram_perf_model->getAccessLatency(pkt_time + dram_latency, VN_ENTRY_SIZE, requester, address, DramCntlrInterface::WRITE, perf);
+            // update 1step entry to point to new entry
+            m_dram_perf_model->getAccessLatency(pkt_time + dram_latency, VN_ENTRY_SIZE, requester, vn_1step_entry_addr, DramCntlrInterface::WRITE, perf);
+            m_dram_writes++;
+            // initialize new entry
+            for (int size_read = 0; size_read < (UInt64)vn_page_type; size_read += VN_ENTRY_SIZE){
+                m_dram_perf_model->getAccessLatency(pkt_time + dram_latency, VN_ENTRY_SIZE, requester, vn_entry_addr + size_read, DramCntlrInterface::WRITE, perf);
+                m_dram_writes++;
+            }
+        } else {  // Update the entry
+            m_dram_perf_model->getAccessLatency(pkt_time + dram_latency, VN_ENTRY_SIZE, requester, vn_entry_addr, DramCntlrInterface::WRITE, perf);
+            m_dram_writes++;
         }
     }
 

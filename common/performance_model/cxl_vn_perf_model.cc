@@ -24,7 +24,7 @@
 #define MYTRACE(...) {}
 #endif
 
-CXLVNPerfModel::CXLVNPerfModel(cxl_id_t cxl_id, UInt64 transaction_size /* in bits */):
+CXLVNPerfModel::CXLVNPerfModel(cxl_id_t cxl_id, UInt64 transaction_size /* in bits */, VVCntlr* vv_cntlr):
     CXLPerfModel(cxl_id, transaction_size),
     m_queue_model(NULL),
     m_cxl_bandwidth(8 * Sim()->getCfg()->getFloat("perf_model/cxl/vnserver/bandwidth")),
@@ -32,7 +32,7 @@ CXLVNPerfModel::CXLVNPerfModel(cxl_id_t cxl_id, UInt64 transaction_size /* in bi
     m_total_access_latency(SubsecondTime::Zero()),
     m_vv_perf_model(NULL)
 {
-    m_vv_perf_model = VVPerfModel::createVVPerfModel(cxl_id, transaction_size);
+    m_vv_perf_model = VVPerfModel::createVVPerfModel(cxl_id, transaction_size, vv_cntlr);
     m_cxl_access_cost =
         SubsecondTime::FS() *
         static_cast<uint64_t>(

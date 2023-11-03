@@ -2,6 +2,7 @@
 #define __VV_PERF_MODEL__
 
 #include "subsecond_time.h"
+#include "vv_cntlr.h"
 #include "cxl_cntlr_interface.h" // for access types
 
 class ShmemPerf;
@@ -13,7 +14,7 @@ class VVPerfModel {
      UInt64 m_num_reads, m_num_updates;
      FILE* f_trace;
     public:
-     static VVPerfModel* createVVPerfModel(cxl_id_t cxl_id, UInt32 vn_size); // version number length in bits
+     static VVPerfModel* createVVPerfModel(cxl_id_t cxl_id, UInt32 vn_size, VVCntlr* vv_cntlr); // version number length in bits
 
      VVPerfModel(UInt32 vn_size) : m_enabled(false), m_dram_reads(0), m_dram_writes(0), m_num_reads(0), m_num_updates(0) {}
      virtual ~VVPerfModel() {}

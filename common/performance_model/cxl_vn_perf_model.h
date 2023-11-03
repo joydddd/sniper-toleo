@@ -7,6 +7,7 @@
 #include "subsecond_time.h"
 #include "cxl_cntlr_interface.h"
 #include "vv_perf_model.h"
+#include "vv_cntlr.h"
 
 class CXLVNPerfModel : public CXLPerfModel
 {
@@ -22,7 +23,7 @@ class CXLVNPerfModel : public CXLPerfModel
 
 
      public:
-      CXLVNPerfModel(cxl_id_t cxl_id, UInt64 cache_block_size /* in bits */);
+      CXLVNPerfModel(cxl_id_t cxl_id, UInt64 cache_block_size /* in bits */, VVCntlr* vv_cntlr);
       ~CXLVNPerfModel();
       SubsecondTime getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size,
                                      core_id_t requester, IntPtr address,
