@@ -172,7 +172,7 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     template.append(('  average dram queueing delay', 'dram.avgqueue', format_ns(2)))
   if 'dram-queue.total-time-used' in results:
     results['dram.bandwidth_util'] = map(lambda a: float(100)*a/time0 if time0 else float('inf'), results['dram-queue.total-time-used'])
-    template.append(('  average dram bandwidth utilization', 'dram.bandwidth_util', lambda v: '%.2f%%' % v))
+    template.append(('  average dram queue utilization', 'dram.bandwidth_util', lambda v: '%.2f%%' % v))
   results['dram.bandwidth'] = map(lambda a: float(64*a)/(time0/1e6) if time0 else float('inf'), results['dram.accesses'])
   template.append(('  average dram bandwidth (GB/s)', 'dram.bandwidth', lambda v: '%.2f' % v))
   
