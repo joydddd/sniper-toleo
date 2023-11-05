@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include "dram_perf_model.h"
+#include "mee_perf_model.h"
 #include "shmem_msg.h"
 #include "shmem_perf.h"
 #include "fixed_types.h"
@@ -25,6 +26,7 @@ namespace PrL1PrL2DramDirectoryMSI
       private:
          std::unordered_map<IntPtr, Byte*> m_data_map;
          DramPerfModel* m_dram_perf_model;
+         MEEPerfModel* m_mee_perf_model;
          FaultInjector* m_fault_injector;
 
          typedef std::unordered_map<IntPtr,UInt64> AccessCountMap;

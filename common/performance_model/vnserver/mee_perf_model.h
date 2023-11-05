@@ -24,7 +24,8 @@ class MEEPerfModel {
     public:
      MEEPerfModel(core_id_t mee_id);
      ~MEEPerfModel();
-     SubsecondTime getAESLatency(SubsecondTime now, core_id_t requester, MEEBase::MEE_op_t op_type, ShmemPerf *perf);
+     SubsecondTime getAESLatency(SubsecondTime now, core_id_t requester, MEEBase::MEE_op_t op_type, ShmemPerf *perf, int num_ares_op = 5);
+     // each encrypt + mac / decrypt + mac operation contains 5 aes operations 
      void enable() { m_enabled = true; } 
      void disable() { m_enabled = false; }
 

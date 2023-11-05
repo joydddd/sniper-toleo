@@ -56,6 +56,11 @@ DramCntlr::DramCntlr(MemoryManagerBase* memory_manager,
    m_dram_perf_model = DramPerfModel::createDramPerfModel(
          memory_manager->getCore()->getId(),
          cache_block_size);
+   
+   if (Sim()->getCfg()->getBool("perf_model/dram/enable_tme"))
+      m_mee_perf_model = new MEEPerfModel(memory_manager->getCore()->getId());
+   else
+      m_mee_perf_model = NULL;
 
    m_fault_injector = Sim()->getFaultinjectionManager()
       ? Sim()->getFaultinjectionManager()->getFaultInjector(memory_manager->getCore()->getId(), MemComponent::DRAM)
@@ -82,6 +87,9 @@ DramCntlr::~DramCntlr()
    delete [] m_dram_access_count;
 
    delete m_dram_perf_model;
+
+   if (m_mee_perf_model)
+      delete m_mee_perf_model;
 #ifdef MYLOG_ENABLED
    fclose(f_trace);
 #endif // MYLOG_ENABLED
@@ -106,6 +114,9 @@ DramCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_buf, 
    }
 
    SubsecondTime dram_access_latency = runDramPerfModel(requester, now, address, READ, perf, is_virtual_addr);
+
+   dram_access_latency += m_mee_perf_model ? m_mee_perf_model->getAESLatency(
+       now + dram_access_latency, requester, MEEBase::DECRYPT, perf, 8) : SubsecondTime::Zero();
 
    ++m_reads;
    #ifdef ENABLE_DRAM_ACCESS_COUNT
@@ -133,7 +144,10 @@ DramCntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, Su
          m_fault_injector->postWrite(address, address, getCacheBlockSize(), (Byte*)m_data_map[address], now);
    }
 
-   SubsecondTime dram_access_latency = runDramPerfModel(requester, now, address, WRITE, &m_dummy_shmem_perf, is_virtual_addr);
+   SubsecondTime aes_access_latency = m_mee_perf_model ? m_mee_perf_model->getAESLatency(
+       now, requester, MEEBase::DECRYPT, &m_dummy_shmem_perf, 8) : SubsecondTime::Zero();
+
+   SubsecondTime dram_access_latency = runDramPerfModel(requester, now + aes_access_latency, address, WRITE, &m_dummy_shmem_perf, is_virtual_addr);
 
    ++m_writes;
 #ifdef ENABLE_DRAM_ACCESS_COUNT
@@ -142,7 +156,7 @@ DramCntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, Su
    MYLOG("[%d]W @ %016lx", requester, address);
    TRACE(requester, address, DramCntlrInterface::WRITE);
 
-   return boost::tuple<SubsecondTime, HitWhere::where_t>(dram_access_latency, HitWhere::DRAM);
+   return boost::tuple<SubsecondTime, HitWhere::where_t>(dram_access_latency + aes_access_latency, HitWhere::DRAM);
 }
 
 SubsecondTime

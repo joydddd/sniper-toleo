@@ -31,12 +31,12 @@ MEEPerfModel::~MEEPerfModel()
     delete m_aes_queue_model;
 }
 
-SubsecondTime MEEPerfModel::getAESLatency(SubsecondTime now, core_id_t requester, MEEBase::MEE_op_t op_type, ShmemPerf *perf){
+SubsecondTime MEEPerfModel::getAESLatency(SubsecondTime now, core_id_t requester, MEEBase::MEE_op_t op_type, ShmemPerf *perf, int num_ares_op){
     if ((!m_enabled) || (requester >= (core_id_t) Config::getSingleton()->getApplicationCores()))
         return SubsecondTime::Zero();
     
     // each encrypt + mac / decrypt + mac operation contains 5 aes operations 
-    SubsecondTime processing_time = m_aes_bandwidth.getRoundedLatency(5); 
+    SubsecondTime processing_time = m_aes_bandwidth.getRoundedLatency(num_ares_op); 
 
     // Compute Queue Delay
     SubsecondTime queue_delay;
