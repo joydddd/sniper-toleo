@@ -83,7 +83,7 @@ SubsecondTime CXLVNPerfModel::getAccessLatency(SubsecondTime pkt_time, UInt64 pk
     SubsecondTime queue_delay;
     queue_delay = m_queue_model->computeQueueDelay(pkt_time + vv_latency, processing_time, requester);
 
-    SubsecondTime access_latency = queue_delay + processing_time + vv_latency;
+    SubsecondTime access_latency = queue_delay + processing_time + vv_latency + m_cxl_access_cost;
 
     switch(access_type){
         case CXLCntlrInterface::VN_READ:

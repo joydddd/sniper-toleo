@@ -9,7 +9,7 @@
    extern Lock iolock;
 #include "core_manager.h"
 #define MYTRACE(...)                                    \
-{ if (log_trace && status_ == DRAMSIM_RUNNING ){                      \
+{ if (log_trace && status_ == DRAMSIM_RUNNING && sim_status_ == SIM_ROI){                      \
     ScopedLock l(iolock);                               \
     fflush(f_trace);                                    \
     fprintf(f_trace, __VA_ARGS__);                      \
@@ -17,7 +17,7 @@
     fflush(f_trace);                                    \
 }}
 #define CALLBACKTRACE(...)                              \
-{ if (log_trace && status_ == DRAMSIM_RUNNING ){         \
+{ if (log_trace && status_ == DRAMSIM_RUNNING && sim_status_ == SIM_ROI){         \
     ScopedLock l(iolock);                               \
     fflush(f_callback_trace);                                    \
     fprintf(f_callback_trace, __VA_ARGS__);                      \
@@ -67,8 +67,6 @@ DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, SubsecondTi
    read_lat_generator.add_latency(default_latency);
 
 #ifdef MYTRACE_ENABLED
-   // DEBUG:
-   log_trace = true;
    if (log_trace && (dram_type == DramType::CXL_MEMORY || dram_type == DramType::CXL_VN)){
     f_trace = fopen(("dramsim_cxl_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".trace").c_str(), "w+");
     f_callback_trace = fopen(("dramsim_cxl_" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id) + ".callback.trace").c_str(), "w+");

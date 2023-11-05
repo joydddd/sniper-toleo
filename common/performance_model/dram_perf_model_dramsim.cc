@@ -42,7 +42,7 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
 {
    Sim()->getHooksManager()->registerHook(HookType::HOOK_INSTRUMENT_MODE, DramPerfModelDramSim::Change_mode_HOOK, (UInt64)this);
    
-   m_dram_access_cost = SubsecondTime::FS() * static_cast<uint64_t>(TimeConverter<float>::NStoFS(Sim()->getCfg()->getFloat("perf_model/dram/default_latency"))); // Operate in fs for higher precision before converting to uint64_t/SubsecondTime
+   m_dram_access_cost = SubsecondTime::FS() * static_cast<uint64_t>(TimeConverter<float>::NStoFS(Sim()->getCfg()->getFloat(m_config_prefix + "default_latency"))); // Operate in fs for higher precision before converting to uint64_t/SubsecondTime
 
    /* Initilize DRAMsim3 simulator */
    m_dramsim = (DRAMsimCntlr**)malloc(sizeof(DRAMsimCntlr*) * m_dramsim_channels);

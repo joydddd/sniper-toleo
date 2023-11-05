@@ -220,6 +220,7 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     results['cxl-dram.avglatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['cxl-dram.total-access-latency'], results['cxl-dram.accesses']))
     template += [
       ('  CXL DRAM summary', '', ''),
+      ('    num cxl dram accesses', 'cxl-dram.accesses', str),
       ('    average dram access latency(CXL expander) (ns)', 'cxl-dram.avglatency', format_ns(2)),
     ]
     if 'cxl-dram.total-queueing-delay' in results:
