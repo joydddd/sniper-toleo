@@ -154,7 +154,7 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     template.append(('  num data writes', 'dram.data-writes', str))
     template.append(('  num mac accesses', 'dram.mac-accesses', str))
     template.append(('  average data read latency', 'dram.avgdatalatency', format_ns(2)))
-    template.append(('  average data bandwidth (GB/s)', 'dram.bandwidth', lambda v: '%.2f' % v))
+    template.append(('  average data bandwidth (GB/s)', 'dram.databw', lambda v: '%.2f' % v))
 
   results['dram.accesses'] = map(sum, zip(results['dram.reads'], results['dram.writes']))
   results['dram.avglatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['dram.total-access-latency'], results['dram.accesses']))
@@ -189,10 +189,13 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
       template += [('CXL effective Access', '', '')]
       results['cxl.effective-read-latency'] = map(lambda (a,b): a/(b or 1), zip(results['cxl.total-effective-read-latency'], results['cxl.data-reads']))
       results['cxl.mac-accesses'] = map(sum, zip(results['cxl.mac-reads'], results['cxl.mac-writes']))
+      results['cxl.data-accesses'] = map(sum, zip(results['cxl.data-reads'], results['cxl.data-writes']))
+      results['cxl.data-bandwidth'] = map(lambda a: float(64*a)/(time0/1e6) if time0 else float('inf'), results['cxl.data-accesses'])
       template.append(('  num data reads', 'cxl.data-reads', str))
       template.append(('  avg read latency', 'cxl.effective-read-latency', format_ns(2)))
       template.append(('  num data writes', 'cxl.data-writes', str))
       template.append(('  num mac accesses', 'cxl.mac-accesses', str))
+      template.append(('  data bandwidth (GB/s)', 'cxl.data-bandwidth', lambda v: '%.2f' % v))
   
   
   if 'cxl.reads' in results:
