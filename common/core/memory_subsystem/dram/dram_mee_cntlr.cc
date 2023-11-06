@@ -32,6 +32,7 @@ DramMEECntlr::DramMEECntlr(MemoryManagerBase* memory_manager,
     registerStatsMetric("dram", memory_manager->getCore()->getId(), "data-writes", &m_writes);
     registerStatsMetric("dram", memory_manager->getCore()->getId(), "mac-reads", &m_mac_reads);
     registerStatsMetric("dram", memory_manager->getCore()->getId(), "mac-writes", &m_mac_writes);
+    registerStatsMetric("dram", memory_manager->getCore()->getId(), "total-data-read-delay", &m_total_data_read_delay);
 
 #ifdef MYLOG_ENABLED
    std::ostringstream trace_filename;
@@ -97,7 +98,8 @@ DramMEECntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_bu
     }
 
     m_reads++;
-    return boost::tuple<SubsecondTime, HitWhere::where_t>(latency, hit_where); // latency when MAC is ready
+    m_total_data_read_delay += latency;
+    return boost::tuple<SubsecondTime, HitWhere::where_t>(latency, hit_where); // latency when data is ready
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
@@ -131,6 +133,7 @@ SubsecondTime DramMEECntlr::handleVNverifyFromCXL(IntPtr address, core_id_t requ
     //                  itostr(now).c_str(), itostr(mee_latency).c_str(),
     //                  itostr(dram_time).c_str());
     SubsecondTime data_verified_time = now + mee_latency > dram_time ? now + mee_latency : dram_time;
+    m_total_data_read_delay += data_verified_time - dram_time;
     MYLOG("[%d]R_FINISH @ %016lx darm time %ld, mee finish time %ld", requester, address, dram_time, now + mee_latency);
     return data_verified_time - now;
 }

@@ -172,7 +172,6 @@ float DRAMsimCntlr::advance(SubsecondTime t_barrier){
    if (status_ == DRAMSIM_RUNNING){ // run DRAMsim/
       uint64_t barrier_clk =  (t_barrier - t_start_).getInternalDataForced() / dram_period.getPeriod().getInternalDataForced();
       uint64_t mem_reqs_issued;
-      if (sim_status_ == SIM_ROI)
          mem_reqs_issued = runDRAMsim(barrier_clk > epoch_size ? barrier_clk - epoch_size : 0);
 
       // calculate last issue requests
@@ -182,7 +181,7 @@ float DRAMsimCntlr::advance(SubsecondTime t_barrier){
       if (clk_ - check_point > 10000 && sim_status_ == SIM_ROI){  // no bp_factor adjust in FASTFORWARD region
          // check if there is any long in-flight requests
          for (auto it = in_flight_reqs_.begin(); it != in_flight_reqs_.end(); it++){
-            LOG_ASSERT_ERROR(it->second >= check_point - 10000, "[DRAMSIM #%d] clk_ %lu Long in-flight request 0x%lX @clk %lu\n", ch_id, clk_, it->first, it->second);
+            LOG_ASSERT_ERROR(it->second + 10000 >= check_point, "[DRAMSIM #%d] clk_ %lu Long in-flight request 0x%lX @clk %lu\n", ch_id, clk_, it->first, it->second);
          }
 
 

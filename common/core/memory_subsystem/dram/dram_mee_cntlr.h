@@ -14,6 +14,7 @@ class DramMEECntlr : public DramCntlrInterface
      FILE* f_trace;
      UInt64 m_reads, m_writes;
      UInt64 m_mac_reads, m_mac_writes;
+     SubsecondTime m_total_data_read_delay;
 
  
      /* called by mee cntlr for getting MAC locally */

@@ -148,9 +148,13 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     ]
     results['dram.data-accesses'] = map(sum, zip(results['dram.data-reads'], results['dram.data-writes']))
     results['dram.mac-accesses'] = map(sum, zip(results['dram.mac-reads'], results['dram.mac-writes']))
+    results['dram.avgdatalatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['dram.total-data-read-delay'], results['dram.data-reads']))
+    results['dram.databw'] = map(lambda a: float(64*a)/(time0/1e6) if time0 else float('inf'), results['dram.data-accesses'])
     template.append(('  num data reads', 'dram.data-reads', str))
     template.append(('  num data writes', 'dram.data-writes', str))
     template.append(('  num mac accesses', 'dram.mac-accesses', str))
+    template.append(('  average data read latency', 'dram.avgdatalatency', format_ns(2)))
+    template.append(('  average data bandwidth (GB/s)', 'dram.bandwidth', lambda v: '%.2f' % v))
 
   results['dram.accesses'] = map(sum, zip(results['dram.reads'], results['dram.writes']))
   results['dram.avglatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['dram.total-access-latency'], results['dram.accesses']))
