@@ -14,6 +14,7 @@ class DramPerfModelDramSim;
 
 class DRAMsimCntlr {
    private:
+    DramType dram_type;
     String config_prefix;
     uint64_t epoch_size;  // cycles in one epoch
     ComponentPeriod dram_period;

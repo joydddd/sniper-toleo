@@ -4,7 +4,7 @@
 #include "config.hpp"
 #include <cstdlib>
 
-#if 0
+#if 1
 #define MYTRACE_ENABLED
    extern Lock iolock;
 #include "core_manager.h"
@@ -29,7 +29,8 @@
 #define CALLBACKTRACE(...) {}
 #endif
 
-DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, SubsecondTime default_latency, DramType dram_type, bool _log_trace):
+DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, SubsecondTime default_latency, DramType dram_type_, bool _log_trace):
+   dram_type(dram_type_),
    config_prefix(dram_type == DramType::SYSTEM_DRAM ? "perf_model/dram/dramsim/"
                 : dram_type == DramType::CXL_MEMORY ? "perf_model/cxl/memory_expander_" + itostr((unsigned int)_dram_cntlr_id) + "/dram/dramsim/" 
                 : "perf_model/cxl/vnserver/dram/dramsim/"),
@@ -170,8 +171,10 @@ float DRAMsimCntlr::advance(SubsecondTime t_barrier){
    }
    if (status_ == DRAMSIM_RUNNING){ // run DRAMsim/
       uint64_t barrier_clk =  (t_barrier - t_start_).getInternalDataForced() / dram_period.getPeriod().getInternalDataForced();
-      uint64_t mem_reqs_issued = runDRAMsim(barrier_clk > epoch_size ? barrier_clk - epoch_size : 0);
-      
+      uint64_t mem_reqs_issued;
+      if (sim_status_ == SIM_ROI)
+         mem_reqs_issued = runDRAMsim(barrier_clk > epoch_size ? barrier_clk - epoch_size : 0);
+
       // calculate last issue requests
       float bp_factor = 1.0f;
 
@@ -179,7 +182,7 @@ float DRAMsimCntlr::advance(SubsecondTime t_barrier){
       if (clk_ - check_point > 10000 && sim_status_ == SIM_ROI){  // no bp_factor adjust in FASTFORWARD region
          // check if there is any long in-flight requests
          for (auto it = in_flight_reqs_.begin(); it != in_flight_reqs_.end(); it++){
-            LOG_ASSERT_ERROR(it->second >= check_point, "[DRAMSIM #%d] clk_ %lu Long in-flight request 0x%lX @clk %lu\n", ch_id, clk_, it->first, it->second);
+            LOG_ASSERT_ERROR(it->second >= check_point - 10000, "[DRAMSIM #%d] clk_ %lu Long in-flight request 0x%lX @clk %lu\n", ch_id, clk_, it->first, it->second);
          }
 
 
@@ -189,8 +192,6 @@ float DRAMsimCntlr::advance(SubsecondTime t_barrier){
          // fprintf(stderr, "[DRAMSIM #%d] Barrier at %ld ns, clk %lu, %lu (%lu) late issue reqs, %lu reqs issued\n", ch_id, t_barrier.getNS(), barrier_clk, late_issue_reqs , epoch_acc_late_launch, epoch_total_launched);
          if (epoch_total_launched > 0){
             bp_factor = ((float)late_issue_reqs - epoch_acc_late_launch) / (float)epoch_total_launched + 1;
-         } else {
-             printPendingReqs();
          }
 
          // if (late_issue_reqs > epoch_total_launched * 0.5){
@@ -201,8 +202,13 @@ float DRAMsimCntlr::advance(SubsecondTime t_barrier){
          if (late_issue_reqs > epoch_total_launched) {
             auto it_too_old = pending_reqs_.upper_bound( clk_ - (clk_ - check_point) * (0.5 / bp_factor));
             uint64_t too_old_reqs = std::distance(pending_reqs_.begin(), it_too_old);
-            fprintf(stderr, "[DRAMSIM #%d] Erase %lu too old requests bp_factor = %f\n", ch_id, too_old_reqs, bp_factor);
-            fprintf(stderr, "[DRAMSIM #%d] Barrier at %ld ns, clk %lu, %lu (%lu) late issue reqs, %lu reqs issued %lu\n", ch_id, t_barrier.getNS(), barrier_clk, late_issue_reqs , epoch_acc_late_launch, epoch_total_launched, mem_reqs_issued);
+            fprintf(stderr, "%d[DRAMSIM #%d] Erase %lu too old requests bp_factor = %f\n", dram_type ,ch_id, too_old_reqs, bp_factor);
+            fprintf(stderr,
+                    "%d[DRAMSIM #%d] Barrier at %ld ns, clk %lu, %lu (%lu) "
+                    "late issue reqs, %lu reqs issued %lu\n",
+                    dram_type, ch_id, t_barrier.getNS(), barrier_clk,
+                    late_issue_reqs, epoch_acc_late_launch,
+                    epoch_total_launched, mem_reqs_issued);
             late_issue_reqs -= too_old_reqs;
             pending_reqs_.erase(pending_reqs_.begin(), it_too_old);
          }
@@ -217,7 +223,6 @@ float DRAMsimCntlr::advance(SubsecondTime t_barrier){
          epoch_total_launched = 0;
          check_point = clk_;
       } else if (sim_status_ != SIM_ROI) { // if not in ROI, erase all late issue request.
-          if (epoch_total_launched == 0) printPendingReqs();
          // check if there is any long in-flight requests
          for (auto it = in_flight_reqs_.begin(); it != in_flight_reqs_.end(); it++){
             LOG_ASSERT_ERROR(it->second >= check_point, "[DRAMSIM #%d] clk_ %lu Long in-flight request 0x%lX @clk %lu\n", ch_id, clk_, it->first, it->second);

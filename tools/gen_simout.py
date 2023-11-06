@@ -170,6 +170,9 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
   elif 'dram.total-queueing-delay' in results:
     results['dram.avgqueue'] = map(lambda (a,b): a/(b or 1), zip(results.get('dram.total-queueing-delay', [0]*ncores), results['dram.accesses']))
     template.append(('  average dram queueing delay', 'dram.avgqueue', format_ns(2)))
+  elif 'dram.total-backpressure-latency' in results:
+    results['dram.avgbp'] = map(lambda (a,b): a/(b or 1), zip(results.get('dram.total-backpressure-latency', [0]*ncores), results['dram.accesses']))
+    template.append(('  average dram backpressure delay', 'dram.avgbp', format_ns(2)))
   if 'dram-queue.total-time-used' in results:
     results['dram.bandwidth_util'] = map(lambda a: float(100)*a/time0 if time0 else float('inf'), results['dram-queue.total-time-used'])
     template.append(('  average dram queue utilization', 'dram.bandwidth_util', lambda v: '%.2f%%' % v))
@@ -226,6 +229,9 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     if 'cxl-dram.total-queueing-delay' in results:
       results['cxl-dram.avgqueue'] = map(lambda (a,b): a/(b or 1), zip(results['cxl-dram.total-queueing-delay'], results['cxl-dram.accesses']))
       template.append(('    average cxl dram queueing delay', 'cxl-dram.avgqueue', format_ns(2)))
+    elif 'cxl-dram.total-backpressure-latency' in results:
+      results['cxl-dram.avgbp'] = map(lambda (a,b): a/(b or 1), zip(results.get('cxl-dram.total-backpressure-latency', [0]*ncores), results['cxl-dram.accesses']))
+      template.append(('    average cxl dram backpressure delay', 'cxl-dram.avgbp', format_ns(2)))
     if 'cxl-dram-queue.total-time-used' in results:
       results['cxl-dram.bandwidth_util'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['cxl-dram-queue.total-time-used'])
       template.append(('    average cxl dram bandwidth utilization', 'cxl-dram.bandwidth_util', lambda v: '%.2f%%' % v))

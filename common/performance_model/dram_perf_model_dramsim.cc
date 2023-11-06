@@ -38,11 +38,14 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
    m_total_bp_latency(SubsecondTime::Zero()),
    m_total_read_latency(SubsecondTime::Zero()),
    m_dramsim(NULL), m_backpressure_queue(NULL),
-   m_dramsim_channels(Sim()->getCfg()->getInt(m_config_prefix + "dramsim/channles_per_contoller"))
+   m_dramsim_channels(Sim()->getCfg()->getInt(m_config_prefix + "dramsim/channles_per_contoller")),
+   m_dramsim_buffering_delay(SubsecondTime::Zero()), m_burst_processing_time(SubsecondTime::Zero()),
+   m_bp_factor(1.0f), m_dram_burst_size(0)
 {
    Sim()->getHooksManager()->registerHook(HookType::HOOK_INSTRUMENT_MODE, DramPerfModelDramSim::Change_mode_HOOK, (UInt64)this);
    
-   m_dram_access_cost = SubsecondTime::FS() * static_cast<uint64_t>(TimeConverter<float>::NStoFS(Sim()->getCfg()->getFloat(m_config_prefix + "default_latency"))); // Operate in fs for higher precision before converting to uint64_t/SubsecondTime
+   m_dram_access_cost = SubsecondTime::FS() * static_cast<uint64_t>(TimeConverter<float>::NStoFS(Sim()->getCfg()->getFloat(m_config_prefix + "default_latency"))); 
+   // Operate in fs for higher precision before converting to uint64_t/SubsecondTime
 
    /* Initilize DRAMsim3 simulator */
    m_dramsim = (DRAMsimCntlr**)malloc(sizeof(DRAMsimCntlr*) * m_dramsim_channels);
@@ -50,19 +53,20 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
       m_dramsim[ch_id] = new DRAMsimCntlr(core_id, ch_id, m_dram_access_cost, dram_type);
    }
 
-   m_bp_factor = Sim()->getCfg()->getFloat(m_config_prefix + "queue_model/bp_factor");
-   ComponentPeriod dram_period = m_dramsim[0]->getDramPeriod();
-   m_burst_processing_time = dram_period.getPeriod() / m_dramsim_channels; // devide by 2 for DDR, divide by number of channels for parallel channels
-   m_dram_burst_size = m_dramsim[0]->getBurstSize();  // in bytes
-   m_backpressure_queue = QueueModel::create(
-      dram_type == DramType::SYSTEM_DRAM ? "dram-queue" : "cxl-dram-queue", 
-      core_id,
-      Sim()->getCfg()->getString(m_config_prefix + "queue_model/type"),
-      m_burst_processing_time);
+   if(Sim()->getCfg()->getBool(m_config_prefix + "queue_model/enabled")){
+      m_bp_factor = Sim()->getCfg()->getFloat(m_config_prefix + "queue_model/bp_factor");
+      ComponentPeriod dram_period = m_dramsim[0]->getDramPeriod();
+      m_burst_processing_time = dram_period.getPeriod() / m_dramsim_channels; // devide by 2 for DDR, divide by number of channels for parallel channels
+      m_dram_burst_size = m_dramsim[0]->getBurstSize();  // in bytes
+      m_backpressure_queue = QueueModel::create(
+         dram_type == DramType::SYSTEM_DRAM ? "dram-queue" : "cxl-dram-queue", 
+         core_id,
+         Sim()->getCfg()->getString(m_config_prefix + "queue_model/type"),
+         m_burst_processing_time);
    
    // ignore backward pressure unless exceeds DramSim Trans buffer. 
       m_dramsim_buffering_delay = m_dramsim[0]->getDramQueueSize() * m_burst_processing_time * (m_cache_block_size / m_dram_burst_size);
-   // m_dramsim_buffering_delay = SubsecondTime::Zero();
+   }
 
    if (dram_type == DramType::SYSTEM_DRAM) {
       registerStatsMetric("dram", core_id, "total-access-latency", &m_total_access_latency);
@@ -115,9 +119,12 @@ DramPerfModelDramSim::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size, 
       return SubsecondTime::Zero();
    }
 
-   SubsecondTime bp_delay;
-   SubsecondTime queueing_delay = m_backpressure_queue->computeQueueDelay(pkt_time, m_burst_processing_time * m_bp_factor * (pkt_size / m_dram_burst_size) , requester);
-   bp_delay = queueing_delay > m_dramsim_buffering_delay ? queueing_delay - m_dramsim_buffering_delay : SubsecondTime::Zero(); // ignore backward pressure if dram buffer is able to handle. 
+   SubsecondTime bp_delay = SubsecondTime::Zero();
+   if (m_backpressure_queue){
+      SubsecondTime queueing_delay = m_backpressure_queue->computeQueueDelay(pkt_time, m_burst_processing_time * m_bp_factor * (pkt_size / m_dram_burst_size) , requester);
+      bp_delay = queueing_delay > m_dramsim_buffering_delay ? queueing_delay - m_dramsim_buffering_delay : SubsecondTime::Zero(); 
+      // ignore backward pressure if dram buffer is able to handle. 
+   }
 
    SubsecondTime dramsim_latency;
    uint32_t dramsim_ch_id = (address / m_cache_block_size) % m_dramsim_channels;
@@ -157,8 +164,8 @@ void DramPerfModelDramSim::dramsimAdvance(SubsecondTime barrier_time){
    m_bp_factor *= new_bp_factor*0.5 + 0.5;
    m_bp_factor = std::max(m_bp_factor, 1.1f);
    m_bp_factor = std::min(m_bp_factor, 2.0f);
-   if (new_bp_factor != 1.0)
-   fprintf(stderr, "new_bp_factor %f, m_bp_fact %f\n",new_bp_factor, m_bp_factor);
+   // if (new_bp_factor != 1.0)
+   //    fprintf(stderr, "final m_bp_fact %f\n", m_bp_factor);
 }
 
 void DramPerfModelDramSim::dramsimStart(InstMode::inst_mode_t sim_status){
