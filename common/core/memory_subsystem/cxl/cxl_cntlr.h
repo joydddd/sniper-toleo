@@ -7,7 +7,6 @@
 #include "shmem_msg.h"
 #include "shmem_perf.h"
 #include "fixed_types.h"
-#include "cxl_address_translator.h"
 #include "cxl_perf_model.h"
 #include "memory_manager_base.h"
 #include "subsecond_time.h"
@@ -27,8 +26,8 @@ class CXLCntlr : public CXLCntlrInterface
     public:
      CXLCntlr(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, UInt32 cache_block_size, CXLAddressTranslator* cxl_address_tranlator, std::vector<bool>& cxl_connected);
      ~CXLCntlr();
-     boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf);
-     boost::tuple<SubsecondTime, HitWhere::where_t> putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now);
+     boost::tuple<SubsecondTime, HitWhere::where_t> getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf, cxl_id_t cxl_id = INVALID_CXL_ID);
+     boost::tuple<SubsecondTime, HitWhere::where_t> putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, cxl_id_t cxl_id = INVALID_CXL_ID);
 
      SubsecondTime getVNFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf) {
          LOG_ASSERT_ERROR(false, "getVNFromCXL not implemented");

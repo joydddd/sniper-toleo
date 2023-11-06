@@ -20,7 +20,7 @@ class CXLPerfModelMemoryExpander : public CXLPerfModel
       DramPerfModel* m_dram_perf_model;
 
      public:
-      CXLPerfModelMemoryExpander(cxl_id_t cxl_id, UInt64 transaction_size /* in bits */, DramPerfModel* dram_perf_model);
+      CXLPerfModelMemoryExpander(cxl_id_t cxl_id, UInt64 transaction_size /* in bits */);
       ~CXLPerfModelMemoryExpander();
       SubsecondTime getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size,
                                      core_id_t requester, IntPtr address,

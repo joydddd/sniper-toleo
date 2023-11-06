@@ -6,6 +6,7 @@
 #include "fixed_types.h"
 #include "subsecond_time.h"
 #include "cxl_cntlr_interface.h"
+#include "vv_perf_model.h"
 
 class CXLVNPerfModel : public CXLPerfModel
 {
@@ -16,6 +17,8 @@ class CXLVNPerfModel : public CXLPerfModel
       
       SubsecondTime m_total_queueing_delay;
       SubsecondTime m_total_access_latency;
+ 
+      VVPerfModel* m_vv_perf_model;
 
 
      public:
@@ -25,8 +28,8 @@ class CXLVNPerfModel : public CXLPerfModel
                                      core_id_t requester, IntPtr address,
                                      CXLCntlrInterface::access_t access_type,
                                      ShmemPerf* perf);
-      void enable() { m_enabled = true; }
-      void disable() { m_enabled = false; }
+      void enable();
+      void disable();
 
       UInt64 getTotalAccesses() { return m_num_accesses; }
 };

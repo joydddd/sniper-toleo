@@ -29,27 +29,35 @@ DramPerfModelConstant::DramPerfModelConstant(core_id_t core_id,
    m_queue_model(NULL),
    m_dram_bandwidth(8 * (dram_type == DramType::SYSTEM_DRAM ? 
                      Sim()->getCfg()->getFloat("perf_model/dram/per_controller_bandwidth") :
-                     Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_" + itostr((unsigned int)core_id) + "/dram/per_controller_bandwidth"))), // Convert bytes to bits
+                     dram_type == DramType::CXL_MEMORY ?
+                     Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_" + itostr((unsigned int)core_id) + "/dram/per_controller_bandwidth")
+                     : Sim()->getCfg()->getFloat("perf_model/cxl/vnserver/dram/per_controller_bandwidth"))), // Convert bytes to bits
    m_total_queueing_delay(SubsecondTime::Zero()),
    m_total_access_latency(SubsecondTime::Zero())
 {
+   m_dram_type = dram_type;
    m_dram_access_cost = SubsecondTime::FS() * static_cast<uint64_t>(TimeConverter<float>::NStoFS(Sim()->getCfg()->getFloat("perf_model/dram/latency"))); // Operate in fs for higher precision before converting to uint64_t/SubsecondTime
 
    if (dram_type == DramType::SYSTEM_DRAM ? 
       Sim()->getCfg()->getBool("perf_model/dram/queue_model/enabled")
-      : Sim()->getCfg()->getBool("perf_model/cxl/memory_expander_" + itostr((unsigned int)core_id) + "/dram/queue_model/enabled"))
+      : dram_type == DramType::CXL_MEMORY ?
+         Sim()->getCfg()->getBool("perf_model/cxl/memory_expander_" + itostr((unsigned int)core_id) + "/dram/queue_model/enabled")
+         : Sim()->getCfg()->getBool("perf_model/cxl/vnserver/dram/queue_model/enabled"))
    {
       m_queue_model = dram_type == DramType::SYSTEM_DRAM ? 
                         QueueModel::create("dram-queue", core_id, Sim()->getCfg()->getString("perf_model/dram/queue_model/type"),
-                                         m_dram_bandwidth.getRoundedLatency(8 * cache_block_size)) // bytes to bits
-                        :QueueModel::create("cxl-dram-queue", core_id, Sim()->getCfg()->getString("perf_model/cxl/memory_expander_" + itostr((unsigned int)core_id) + "/dram/queue_model/type"),
-                                         m_dram_bandwidth.getRoundedLatency(8 * cache_block_size)); // bytes to bits
+                                         m_dram_bandwidth.getRoundedLatency(8 * cache_block_size)) : // bytes to bits
+                        dram_type == DramType::CXL_MEMORY ?
+                        QueueModel::create("cxl-dram-queue", core_id, Sim()->getCfg()->getString("perf_model/cxl/memory_expander_" + itostr((unsigned int)core_id) + "/dram/queue_model/type"),
+                                         m_dram_bandwidth.getRoundedLatency(8 * cache_block_size)): // bytes to bits
+                        QueueModel::create("cxl-dram-queue", core_id, Sim()->getCfg()->getString("perf_model/cxl/vnserver/dram/queue_model/type"),
+                                         m_dram_bandwidth.getRoundedLatency(8 * cache_block_size));
    }
 
    if (dram_type == DramType::SYSTEM_DRAM) {
       registerStatsMetric("dram", core_id, "total-access-latency", &m_total_access_latency);
       registerStatsMetric("dram", core_id, "total-queueing-delay", &m_total_queueing_delay);
-   } else if (dram_type == DramType::CXL_MEMORY){
+   } else if (dram_type == DramType::CXL_MEMORY || dram_type == DramType::CXL_VN){
       registerStatsMetric("cxl-dram", core_id, "total-access-latency", &m_total_access_latency);
       registerStatsMetric("cxl-dram", core_id, "total-queueing-delay", &m_total_queueing_delay);
    } else {
@@ -57,10 +65,18 @@ DramPerfModelConstant::DramPerfModelConstant(core_id_t core_id,
    }
 #ifdef MYTRACE_ENABLED
    std::ostringstream trace_filename;
-   if (dram_type == DramType::SYSTEM_DRAM){
-      trace_filename << "dram_perf_" << m_core_id << ".trace";
-   } else if (dram_type == DramType::CXL_MEMORY){
-      trace_filename << "cxl_dram_perf_" << m_core_id << ".trace";
+   switch (dram_type) {
+      case DramType::SYSTEM_DRAM:
+       trace_filename << "dram_perf_" << m_core_id << ".trace";
+       break;
+      case DramType::CXL_MEMORY: 
+       trace_filename << "cxl_dram_perf_" << m_core_id << ".trace";
+       break;
+      case DramType::CXL_VN: 
+       trace_filename << "vn_dram_perf.trace";
+       break;
+      default:
+       LOG_PRINT_ERROR("Unsupported dram type %d", dram_type);
    }
    f_trace = fopen(trace_filename.str().c_str(), "w+");
    std::cerr << "Create DRAM perf trace " << trace_filename.str().c_str() << std::endl;
@@ -113,10 +129,12 @@ DramPerfModelConstant::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size,
          LOG_ASSERT_ERROR(false, "Unsupported DramCntlrInterface::access_t(%u)", access_type);
    }
    
-   perf->updateTime(pkt_time);
-   perf->updateTime(pkt_time + queue_delay, ShmemPerf::DRAM_QUEUE);
-   perf->updateTime(pkt_time + queue_delay + processing_time, ShmemPerf::DRAM_BUS);
-   perf->updateTime(pkt_time + queue_delay + processing_time + m_dram_access_cost, ShmemPerf::DRAM_DEVICE);
+   if (m_dram_type != CXL_VN){
+      perf->updateTime(pkt_time);
+      perf->updateTime(pkt_time + queue_delay, ShmemPerf::DRAM_QUEUE);
+      perf->updateTime(pkt_time + queue_delay + processing_time, ShmemPerf::DRAM_BUS);
+      perf->updateTime(pkt_time + queue_delay + processing_time + m_dram_access_cost, ShmemPerf::DRAM_DEVICE);
+   }
 
    // Update Memory Counters
    m_num_accesses ++;

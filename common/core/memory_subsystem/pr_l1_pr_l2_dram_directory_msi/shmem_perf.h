@@ -54,6 +54,7 @@ class ShmemPerf
 
       core_id_t getCore() const { return m_core_id; }
       SubsecondTime getInitialTime() const { return m_time_begin; }
+      SubsecondTime getLastTime() const { return m_time_last; }
       SubsecondTime &getComponent(shmem_times_type_t reason) { return m_times[reason]; }
 
    private:

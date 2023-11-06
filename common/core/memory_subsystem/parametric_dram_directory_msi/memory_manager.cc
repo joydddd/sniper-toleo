@@ -340,6 +340,7 @@ MemoryManager::MemoryManager(Core* core,
          m_dram_directory_cntlr = new PrL1PrL2DramDirectoryMSI::DramDirectoryCntlr(getCore()->getId(),
                this,
                m_dram_controller_home_lookup,
+               m_address_translator,
                m_nuca_cache,
                dram_directory_total_entries,
                dram_directory_associativity,
@@ -579,6 +580,7 @@ MYLOG("begin");
                break;
 
             case MemComponent::DRAM:
+            case MemComponent::CXL:
                m_dram_directory_cntlr->handleMsgFromDRAM(sender, shmem_msg);
                break;
 
@@ -624,8 +626,15 @@ MYLOG("begin");
          {
             case MemComponent::DRAM:
             {
+               LOG_ASSERT_ERROR(m_cxl_vnserver_cntlr != NULL, "CXL should not get message from DRAM except for VN updates/gets");
+               m_cxl_vnserver_cntlr->handleMsgFromDram(sender, shmem_msg);
+               break;
+            }
+
+            case MemComponent::TAG_DIR:
+            {
                CXLCntlrInterface* cxl_interface = m_cxl_vnserver_cntlr ? (CXLCntlrInterface*)m_cxl_vnserver_cntlr : (CXLCntlrInterface*)m_cxl_cntlr;
-               cxl_interface->handleMsgFromDram(sender, shmem_msg);
+               cxl_interface->handleMsgFromTagDirectory(sender, shmem_msg);
                break;
             }
 

@@ -4,6 +4,7 @@
 #include "config.hpp"
 #include "stats.h"
 #include "shmem_perf.h"
+#include "dram_perf_model.h"
 
 #if 0
 #define MYTRACE_ENABLED
@@ -23,14 +24,16 @@
 #define MYTRACE(...) {}
 #endif
 
-CXLPerfModelMemoryExpander::CXLPerfModelMemoryExpander(cxl_id_t cxl_id, UInt64 transaction_size /* in bits */, DramPerfModel* dram_perf_model):
+CXLPerfModelMemoryExpander::CXLPerfModelMemoryExpander(cxl_id_t cxl_id, UInt64 transaction_size /* in bits */):
     CXLPerfModel(cxl_id, transaction_size),
     m_queue_model(NULL),
     m_cxl_bandwidth(8 * Sim()->getCfg()->getFloat("perf_model/cxl/memory_expander_" + itostr((unsigned int)cxl_id) + "/bandwidth")),
     m_total_queueing_delay(SubsecondTime::Zero()),
     m_total_access_latency(SubsecondTime::Zero()),
-    m_dram_perf_model(dram_perf_model)
+    m_dram_perf_model(NULL)
 {
+    m_dram_perf_model = DramPerfModel::createDramPerfModel(
+            cxl_id, transaction_size/8, DramType::CXL_MEMORY);
     m_cxl_access_cost =
         SubsecondTime::FS() *
         static_cast<uint64_t>(
@@ -40,9 +43,6 @@ CXLPerfModelMemoryExpander::CXLPerfModelMemoryExpander(cxl_id_t cxl_id, UInt64 t
         "cxl-queue", cxl_id,
         Sim()->getCfg()->getString("perf_model/cxl/queue_type"),
         m_cxl_bandwidth.getRoundedLatency(transaction_size));
-    fprintf(stderr, "Minimal precessing time for CXL %lu fs\n",
-            m_cxl_bandwidth.getRoundedLatency(transaction_size).getFS());
-    std::cerr << m_cxl_bandwidth << std::endl;
 
     registerStatsMetric("cxl", cxl_id, "total-access-latency", &m_total_access_latency);
     registerStatsMetric("cxl", cxl_id, "total-queueing-delay", &m_total_queueing_delay);
@@ -61,6 +61,10 @@ CXLPerfModelMemoryExpander::~CXLPerfModelMemoryExpander()
     {
         delete m_queue_model;
         m_queue_model = NULL;
+    }
+    if (m_dram_perf_model){
+        delete m_dram_perf_model;
+        m_dram_perf_model = NULL;
     }
 }
 

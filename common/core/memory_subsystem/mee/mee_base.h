@@ -13,15 +13,17 @@
 class MemoryManagerBase;
 class ShmemPerfModel;
 class ShmemPerf;
+class CXLAddressTranslator;
 
 class MEEBase {
     protected:
      MemoryManagerBase* m_memory_manager;
      ShmemPerfModel* m_shmem_perf_model;
-     
-     UInt64 m_num_encry, m_num_decry;
-     UInt64 m_mac_gen, m_mac_verify, m_mac_fetch;
-     UInt32 m_vn_length, m_mac_length; // in bits
+     CXLAddressTranslator* m_address_translator;
+
+     UInt64 m_encry_macs, m_decry_verifys;
+     UInt64 m_mac_reads;
+     UInt32 m_vn_length;        // in bits
      UInt32 m_cache_block_size; // in bytes
      core_id_t m_core_id;
 
@@ -33,36 +35,44 @@ class MEEBase {
         NUM_MEE_OP_TYPES
      } MEE_op_t;
 
-    MEEBase(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, core_id_t core_id, UInt32 cache_block_size);
+    MEEBase(MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model,
+            CXLAddressTranslator* address_translator, core_id_t core_id, // If MEE is used for a CXL cntlr, core_id = cxl_id + 1
+            UInt32 cache_block_size);
     virtual ~MEEBase() {}
 
     MemoryManagerBase* getMemoryManager() { return m_memory_manager; }
     ShmemPerfModel* getShmemPerfModel() { return m_shmem_perf_model; }
 
-    /* during WRITE: generate MAC from cipher(critical) + VN(critical). write MAC & VN to mee cache. */
-    virtual boost::tuple<SubsecondTime, HitWhere::where_t> genMAC(
-IntPtr address, core_id_t requester, SubsecondTime now) = 0;
+    /* during WRITE:
+    Input: 
+        plaintext (512bit)
+        VN (updated)
+    Output:
+        ciphertext
+        MAC (and write to MAC cache)
+    */
+    virtual SubsecondTime EncryptGenMAC(IntPtr address, core_id_t requester,
+                                        SubsecondTime now) = 0;
 
-    /* during READ: generate MAC from cipher(critical) + VN(critical). and compare against MAC that has already been fetched */
-    virtual SubsecondTime verifyMAC(IntPtr address, core_id_t requester,
-                            SubsecondTime now, ShmemPerf* perf) = 0;
-    /* during READ: fetch MAC and corresponding VN from corresponding mem ctnlr/mee cache 
-    *  return: MAC latency, VN latency, hitwhere */
-    virtual boost::tuple<SubsecondTime, SubsecondTime, HitWhere::where_t> fetchMACVN(
-        IntPtr address, core_id_t requester, SubsecondTime now,
-        ShmemPerf *perf) = 0;
-
-    /* druing WRITE: generate cipher text from plaintext + VN(critical). */
-    virtual SubsecondTime encryptData(IntPtr address, core_id_t requester,
-                                      SubsecondTime now) = 0;
-    
-    /* during READ: genreate plaintext from cipher + VN(critical) */
-    virtual SubsecondTime decryptData(IntPtr address, core_id_t requester,
-                                      SubsecondTime now, ShmemPerf *perf) = 0;
+    /* during READ: 
+    Input:
+        MAC
+        ciphertext
+        VN
+    Output:
+        plaintext
+    */
+    virtual SubsecondTime DecryptVerifyData(IntPtr address, core_id_t requester,
+                                            SubsecondTime now,
+                                            ShmemPerf* perf) = 0;
+    /* during READ: fetch MAC and VN from corresponding mem ctnlr/mee cache
+    Return: MAC latency, VN latency, hitwhere */
+    virtual boost::tuple<SubsecondTime, SubsecondTime, HitWhere::where_t>
+    fetchMACVN(IntPtr address, core_id_t requester, SubsecondTime now,
+               ShmemPerf* perf) = 0;
 
     UInt32 getVNLength() { return m_vn_length; } // in bits
     UInt32 getCacheBlockSize() { return m_cache_block_size; }
-    UInt32 getMACLength() { return m_mac_length; } // in bits
     virtual void enablePerfModel() = 0;
     virtual void disablePerfModel() = 0;
 };
