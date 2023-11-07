@@ -32,7 +32,8 @@ MEENaive::MEENaive(MemoryManagerBase *memory_manager,
     : MEEBase(memory_manager, shmem_perf_model, address_translator, cxl_cntlr ? core_id + 1 : core_id,
               cache_block_size),
       m_cxl_id(cxl_cntlr ? core_id : HOST_CXL_ID),
-      m_mac_misses(0), m_vn_misses(0),
+      m_mac_misses(0), m_mac_cache(NULL),
+      m_vn_misses(0), m_vn_table(NULL),
       m_mee_perf_model(NULL),
       m_cxl_cntlr(cxl_cntlr),
       m_dram_cntlr(dram_cntlr),
@@ -40,6 +41,7 @@ MEENaive::MEENaive(MemoryManagerBase *memory_manager,
       m_enable_trace(false) {
     m_mee_perf_model = new MEEPerfModel(m_core_id);
 
+    if (m_mac_cache_enabled){
     /* Allocate MAC cache */
     m_mac_cache_size = Sim()->getCfg()->getInt("perf_model/mee/cache/size") * 1024; // KB -> Bytes
     m_mac_per_cacheline = Sim()->getCfg()->getInt("perf_model/mee/mac_per_cl");
@@ -50,7 +52,6 @@ MEENaive::MEENaive(MemoryManagerBase *memory_manager,
     "perf_model/mee/cache/data_access_time", m_core_id));
 
     registerStatsMetric("mee", m_core_id, "mac-misses", &m_mac_misses);
-    registerStatsMetric("mee", m_core_id, "vn-misses", &m_vn_misses);
 
     m_mac_cache = new Cache(
         "mac-cache", "perf_model/mee/cache", m_core_id, 
@@ -61,8 +62,10 @@ MEENaive::MEENaive(MemoryManagerBase *memory_manager,
         CacheBase::SHARED_CACHE,
         CacheBase::parseAddressHash(Sim()->getCfg()->getStringArray("perf_model/mee/cache/address_hash", m_core_id)),
         NULL /* Fault Injection Manager */);
+    }
 
 
+    if (m_vn_cache_enabled){
     /* Allocate VN table */
     m_vn_table_entries = Sim()->getCfg()->getInt("perf_model/mee/vn_table/entries");
     m_vn_per_entry = Sim()->getCfg()->getInt("perf_model/mee/vn_table/vn_per_entry");
@@ -70,6 +73,8 @@ MEENaive::MEENaive(MemoryManagerBase *memory_manager,
     m_vn_table = new Cache("vn-cache", "perf_model/mee/vn-table", m_core_id,
                            m_vn_table_entries, 1, getCacheBlockSize() * m_vn_per_entry, "lru",
                            CacheBase::PR_L1_CACHE, CacheBase::HASH_MOD);
+    registerStatsMetric("mee", m_core_id, "vn-misses", &m_vn_misses);
+    }
 
 #ifdef MYLOG_ENABLED
     std::ostringstream trace_filename;
@@ -82,12 +87,16 @@ MEENaive::MEENaive(MemoryManagerBase *memory_manager,
 MEENaive::~MEENaive()
 {
     delete m_mee_perf_model;
-    delete m_vn_table;
-    delete m_mac_cache;
+    if (m_vn_table) delete m_vn_table;
+    if (m_mac_cache) delete m_mac_cache;
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
 MEENaive::accessMAC(IntPtr v_addr, Cache::access_t access, core_id_t requester, SubsecondTime now, ShmemPerf *perf){
+    // if mac_cache is not enabled, return 0 
+    if (!m_mac_cache_enabled) return boost::make_tuple<SubsecondTime, HitWhere::where_t>(SubsecondTime::Zero(), m_cxl_cntlr ? HitWhere::CXL : HitWhere::DRAM);
+    
+    
     IntPtr mac_addr = m_address_translator->getMACAddrFromVirtual(v_addr);
     CacheBlockInfo *block_info = m_mac_cache->peekSingleLine(mac_addr);
     SubsecondTime latency = m_mac_cache_tag_latency;
@@ -138,6 +147,8 @@ void MEENaive::insertMAC(Cache::access_t access, IntPtr mac_addr, core_id_t requ
 
 /* Call on DecryptVerifyData. Insert VN entry if entry does not exist */
 bool MEENaive::insertVN(IntPtr v_addr, core_id_t requester, SubsecondTime now){
+    if (!m_vn_cache_enabled) return true; // no VN cache
+
     IntPtr vn_entry_idx = v_addr / (m_vn_per_entry * getCacheBlockSize());
     bool hit = m_vn_table->accessSingleLine(vn_entry_idx, Cache::LOAD, NULL, 0, now, false);
     if (hit) return false;
@@ -160,6 +171,10 @@ bool MEENaive::insertVN(IntPtr v_addr, core_id_t requester, SubsecondTime now){
 */
 boost::tuple<SubsecondTime, HitWhere::where_t> 
 MEENaive::lookupVN(IntPtr v_addr, core_id_t requester, SubsecondTime now, ShmemPerf* perf){
+    if (!m_vn_cache_enabled) // no vn cache. always miss
+        return boost::make_tuple<SubsecondTime, HitWhere::where_t>(
+            SubsecondTime::Zero(), HitWhere::CXL_VN);
+
     SubsecondTime latency = m_vn_table_latency;
     IntPtr vn_entry_idx = v_addr / (m_vn_per_entry * getCacheBlockSize());
     bool hit = m_vn_table->accessSingleLine(vn_entry_idx, Cache::LOAD, NULL, 0, now, true);
@@ -217,8 +232,7 @@ MEENaive::fetchMACVN(IntPtr address, core_id_t requester, SubsecondTime now,
     m_mac_reads++;
 
     return boost::make_tuple<SubsecondTime, SubsecondTime, HitWhere::where_t>(
-        mac_latency, vn_latency,
-        vn_hit_where == HitWhere::CXL_VN ? HitWhere::CXL_VN : HitWhere::DRAM);
+        mac_latency, vn_latency, vn_hit_where);
 }
 
 

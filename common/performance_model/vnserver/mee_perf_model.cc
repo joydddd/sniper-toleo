@@ -13,6 +13,7 @@ MEEPerfModel::MEEPerfModel(core_id_t mee_id):
     m_mee_period(ComponentPeriod::fromFreqHz(m_mee_freq)),
     m_aes_latency(SubsecondTimeCycleConverter(&m_mee_period).cyclesToSubsecondTime(Sim()->getCfg()->getInt("perf_model/mee/latency"))),
     m_aes_bandwidth(Sim()->getCfg()->getInt("perf_model/mee/bandwidth") * m_mee_freq), // num of aes encryption per cycle
+    m_aes_per_req(Sim()->getCfg()->getInt("perf_model/mee/aes_per_access")),
     m_total_queueing_delay(SubsecondTime::Zero()),
     m_total_aes_latency(SubsecondTime::Zero())
 {
@@ -36,7 +37,7 @@ SubsecondTime MEEPerfModel::getAESLatency(SubsecondTime now, core_id_t requester
         return SubsecondTime::Zero();
     
     // each encrypt + mac / decrypt + mac operation contains 5 aes operations 
-    SubsecondTime processing_time = m_aes_bandwidth.getRoundedLatency(5); 
+    SubsecondTime processing_time = m_aes_bandwidth.getRoundedLatency(m_aes_per_req); 
 
     // Compute Queue Delay
     SubsecondTime queue_delay;

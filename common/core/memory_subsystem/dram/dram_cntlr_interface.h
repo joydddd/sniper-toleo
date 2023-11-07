@@ -24,7 +24,6 @@ class DramCntlrInterface
       ShmemPerf m_dummy_shmem_perf;
       CXLAddressTranslator* m_address_translator;
       UInt32 m_cache_block_size;
-      bool m_mee_enabled;
 
       UInt32 getCacheBlockSize() { return m_cache_block_size; }
       MemoryManagerBase* getMemoryManager() { return m_memory_manager; }
@@ -49,7 +48,6 @@ class DramCntlrInterface
          , m_shmem_perf_model(shmem_perf_model)
          , m_address_translator(cxl_address_translator)
          , m_cache_block_size(cache_block_size)
-         , m_mee_enabled(Sim()->getCfg()->getBool("perf_model/mee/enable"))
       {}
       virtual ~DramCntlrInterface() {}
 

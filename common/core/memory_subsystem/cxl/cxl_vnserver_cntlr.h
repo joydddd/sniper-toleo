@@ -19,14 +19,19 @@
 class CXLVNServerCntlr : public CXLCntlrInterface 
 {
     private:
+     bool m_mac_enabled, m_vn_enabled;
+     /* VV connection */
      cxl_id_t m_vnserver_cxl_id;
-     UInt64 m_vn_length, m_cxl_pkt_size;
+     UInt64 m_cxl_pkt_size;
      UInt64 m_vn_reads, m_vn_updates;
+     CXLPerfModel* m_vn_perf_model;
+
+     /* stats */
      UInt64 *m_data_reads, *m_data_writes; // cxl data reads and write
      UInt64 *m_mac_reads, *m_mac_writes; // cxl memory expander reads and writes due to mac access.
      SubsecondTime *m_total_read_delay; // cxl device total read delay for data accesses. 
 
-     CXLPerfModel* m_vn_perf_model;
+
      CXLCntlr* m_cxl_cntlr;
      std::vector<MEEBase*> m_mee;
 

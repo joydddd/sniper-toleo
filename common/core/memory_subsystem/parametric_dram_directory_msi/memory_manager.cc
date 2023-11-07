@@ -257,7 +257,7 @@ MemoryManager::MemoryManager(Core* core,
       }
       Sim()->getStatsManager()->logTopology("cxl-cntlr", core->getId(), core->getId());
       m_cxl_cntlr = new CXLCntlr(this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator, cxl_dev_connected);
-      if (cxl_vnserver_enable) {
+      if (Sim()->getCfg()->getBool("perf_model/mee/enable")) {
          m_cxl_vnserver_cntlr = new CXLVNServerCntlr(this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator, m_cxl_cntlr, core->getId());
       }
    }

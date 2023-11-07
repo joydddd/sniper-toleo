@@ -17,6 +17,7 @@ class CXLAddressTranslator;
 
 class MEEBase {
     protected:
+     bool m_mac_cache_enabled, m_vn_cache_enabled;
      MemoryManagerBase* m_memory_manager;
      ShmemPerfModel* m_shmem_perf_model;
      CXLAddressTranslator* m_address_translator;

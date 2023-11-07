@@ -79,6 +79,8 @@ void DramCntlrInterface::handleMsgFromTagDirectory(core_id_t sender, PrL1PrL2Dra
             address, (Byte*)&dram_time, sizeof(SubsecondTime), HitWhere::where_t::DRAM, 
             shmem_msg->getPerf(), ShmemPerfModel::_SIM_THREAD);
             return;
+         } else {
+            LOG_PRINT_ERROR("Uknown hit_where %u from getDataFromDram", hit_where);
          }
          break;
       }

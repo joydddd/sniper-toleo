@@ -17,6 +17,7 @@ class MEEPerfModel {
      ComponentPeriod m_mee_period;
      SubsecondTime m_aes_latency;
      ComponentBandwidth m_aes_bandwidth;
+     UInt32 m_aes_per_req; // number of aes operations per request
 
      SubsecondTime m_total_queueing_delay;
      SubsecondTime m_total_aes_latency;

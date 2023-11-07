@@ -25,35 +25,38 @@ CXLVNServerCntlr::CXLVNServerCntlr(
       MemoryManagerBase* memory_manager, ShmemPerfModel* shmem_perf_model, UInt32 cache_block_size,
       CXLAddressTranslator* cxl_address_tranlator, CXLCntlr* cxl_cntlr, core_id_t core_id):
     CXLCntlrInterface(memory_manager, shmem_perf_model, cache_block_size, cxl_address_tranlator),
+    m_mac_enabled(Sim()->getCfg()->getBool("perf_model/mee/enable_mac")),
+    m_vn_enabled(Sim()->getCfg()->getBool("perf_model/mee/enable_vn")),
     m_vnserver_cxl_id(cxl_address_tranlator->getnumCXLDevices()),
-    m_vn_reads(0),
-    m_vn_updates(0),
+    m_vn_reads(0), m_vn_updates(0),
+    m_vn_perf_model(NULL),
     m_data_reads(NULL), m_data_writes(NULL),
     m_mac_reads(NULL), m_mac_writes(NULL),
     m_total_read_delay(NULL),
     m_cxl_cntlr(cxl_cntlr),
+    m_mee(NULL),
     f_trace(NULL),
     m_enable_trace(false)
 {
-   m_cxl_pkt_size = Sim()->getCfg()->getInt("perf_model/cxl/vnserver/pkt_size");
+   
    m_mee.resize(cxl_address_tranlator->getnumCXLDevices());
    for (cxl_id_t cxl_id = 0; cxl_id < m_address_translator->getnumCXLDevices(); cxl_id++){
       m_mee[cxl_id] = new MEENaive(memory_manager, shmem_perf_model, m_address_translator, cxl_id, cache_block_size, this);
    }
 
-   m_vn_perf_model = CXLPerfModel::createCXLPerfModel(cxl_address_tranlator->getnumCXLDevices(), m_cxl_pkt_size, true);
-   registerStatsMetric("cxl", cxl_address_tranlator->getnumCXLDevices(), "reads", &m_vn_reads);
-   registerStatsMetric("cxl", cxl_address_tranlator->getnumCXLDevices(), "writes", &m_vn_updates);
+   if (m_vn_server_enabled){
+      m_cxl_pkt_size = Sim()->getCfg()->getInt("perf_model/cxl/vnserver/pkt_size");
+      m_vn_perf_model = CXLPerfModel::createCXLPerfModel(m_vnserver_cxl_id, m_cxl_pkt_size, true);
+      registerStatsMetric("cxl", m_vnserver_cxl_id, "reads", &m_vn_reads);
+      registerStatsMetric("cxl", m_vnserver_cxl_id, "writes", &m_vn_updates);
+   }
    
    //Initialize stats
    m_data_reads = (UInt64*) malloc(sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
    memset(m_data_reads, 0, sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
    m_data_writes = (UInt64*) malloc(sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
    memset(m_data_writes, 0, sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
-   m_mac_reads = (UInt64*) malloc(sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
-   memset(m_mac_reads, 0, sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
-   m_mac_writes = (UInt64*) malloc(sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
-   memset(m_mac_writes, 0, sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
+  
    m_total_read_delay = (SubsecondTime*)malloc(sizeof(SubsecondTime)*cxl_address_tranlator->getnumCXLDevices());
    for (cxl_id_t cxl_id = 0; cxl_id < cxl_address_tranlator->getnumCXLDevices();
         cxl_id++) {
@@ -62,14 +65,26 @@ CXLVNServerCntlr::CXLVNServerCntlr(
                                &m_data_reads[cxl_id]);
            registerStatsMetric("cxl", cxl_id, "data-writes",
                                &m_data_writes[cxl_id]);
-           registerStatsMetric("cxl", cxl_id, "mac-reads",
-                               &m_mac_reads[cxl_id]);
-           registerStatsMetric("cxl", cxl_id, "mac-writes",
-                               &m_mac_writes[cxl_id]);
          m_total_read_delay[cxl_id] = SubsecondTime::Zero();
          registerStatsMetric("cxl", cxl_id, "total-effective-read-latency",
                              &m_total_read_delay[cxl_id]);
        }
+   }
+
+   if (m_mac_enabled){ // register stats related to mac
+   m_mac_reads = (UInt64*) malloc(sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
+   memset(m_mac_reads, 0, sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
+   m_mac_writes = (UInt64*) malloc(sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
+   memset(m_mac_writes, 0, sizeof(UInt64)*cxl_address_tranlator->getnumCXLDevices());
+   for (cxl_id_t cxl_id = 0; cxl_id < cxl_address_tranlator->getnumCXLDevices();
+        cxl_id++) {
+       if (m_cxl_cntlr->m_cxl_connected[cxl_id]) {
+           registerStatsMetric("cxl", cxl_id, "mac-reads",
+                               &m_mac_reads[cxl_id]);
+           registerStatsMetric("cxl", cxl_id, "mac-writes",
+                               &m_mac_writes[cxl_id]);
+       }
+   }
    }
 
 #ifdef MYLOG_ENABLED
@@ -99,6 +114,7 @@ CXLVNServerCntlr::~CXLVNServerCntlr()
 
 
 SubsecondTime CXLVNServerCntlr::getVN(IntPtr address, core_id_t requester, SubsecondTime now, ShmemPerf *perf){
+   LOG_ASSERT_ERROR(m_vn_server_enabled, "CXL VN Server is not enabled, cannot handle CXL_VN_REQ");
    SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, 0, requester, address, CXLCntlrInterface::VN_READ, perf);
 
    ++m_vn_reads;
@@ -109,6 +125,7 @@ SubsecondTime CXLVNServerCntlr::getVN(IntPtr address, core_id_t requester, Subse
 
 
 SubsecondTime CXLVNServerCntlr::updateVN(IntPtr address, core_id_t requester, SubsecondTime now, ShmemPerf *perf){
+    LOG_ASSERT_ERROR(m_vn_server_enabled, "CXL VN Server is not enabled, cannot handle CXL_VN_UPDATE");
     SubsecondTime cxl_latency = m_vn_perf_model->getAccessLatency(now, 0, requester, address, CXLCntlrInterface::VN_UPDATE, perf);
 
    ++m_vn_updates;
@@ -118,6 +135,7 @@ SubsecondTime CXLVNServerCntlr::updateVN(IntPtr address, core_id_t requester, Su
 }
 
 SubsecondTime CXLVNServerCntlr::getMAC(IntPtr mac_addr, core_id_t requester, cxl_id_t cxl_id, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
+   LOG_ASSERT_ERROR(m_mac_enabled, "MAC is not enabled, cannot handle getMAC");
    SubsecondTime cxl_latency;
    HitWhere::where_t hit_where;
    LOG_ASSERT_ERROR(cxl_id != HOST_CXL_ID, "mac is not located on CXL cntlr");
@@ -130,6 +148,7 @@ SubsecondTime CXLVNServerCntlr::getMAC(IntPtr mac_addr, core_id_t requester, cxl
 }
 
 SubsecondTime CXLVNServerCntlr::putMAC(IntPtr mac_addr, core_id_t requester, cxl_id_t cxl_id, Byte* data_buf, SubsecondTime now){
+   LOG_ASSERT_ERROR(m_mac_enabled, "MAC is not enabled, cannot handle putMAC");
    SubsecondTime cxl_latency;
    HitWhere::where_t hit_where;
    LOG_ASSERT_ERROR(cxl_id != HOST_CXL_ID, "mac is not located on CXL cntlr");
@@ -146,7 +165,7 @@ boost::tuple<SubsecondTime, HitWhere::where_t>
 CXLVNServerCntlr::getDataFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf, cxl_id_t cxl_id){
    SubsecondTime vn_latency, mac_latency, dram_latency;
    SubsecondTime latency;
-   HitWhere::where_t hit_where, hit_where_mac;
+   HitWhere::where_t hit_where, hit_where_vn;
 
    LOG_ASSERT_ERROR(cxl_id == INVALID_CXL_ID, "cxl vnserver cntlr only accepts virtual address");
    cxl_id = m_address_translator->getHome(address);
@@ -156,8 +175,8 @@ CXLVNServerCntlr::getDataFromCXL(IntPtr address, core_id_t requester, Byte* data
    LOG_ASSERT_ERROR(hit_where == HitWhere::CXL, "Data %lu should be in CXL memory expander", address);
 
    /* Fetch VN and MAC for verification */
-   boost::tie(mac_latency, vn_latency, hit_where_mac) = m_mee[cxl_id]->fetchMACVN(address, requester, now, perf); // fetch MAC & VN. (MEE_CACHE, or CXL, CXL_VN)
-   if (hit_where_mac == HitWhere::CXL_VN) hit_where = HitWhere::CXL_VN;
+   boost::tie(mac_latency, vn_latency, hit_where_vn) = m_mee[cxl_id]->fetchMACVN(address, requester, now, perf); // fetch MAC & VN. (MEE_CACHE, or CXL, CXL_VN)
+   if (m_vn_enabled && hit_where_vn == HitWhere::CXL_VN) hit_where = HitWhere::CXL_VN;
    latency = dram_latency > mac_latency ? dram_latency : mac_latency;
    latency = latency > vn_latency ? latency : vn_latency;
 
@@ -173,13 +192,14 @@ CXLVNServerCntlr::getDataFromCXL(IntPtr address, core_id_t requester, Byte* data
 
 boost::tuple<SubsecondTime, HitWhere::where_t> 
 CXLVNServerCntlr::putDataToCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, cxl_id_t cxl_id){
-   SubsecondTime encryption_latency, vn_latency, dram_latency, latency;
+   SubsecondTime encryption_latency, vn_latency = SubsecondTime::Zero(), dram_latency, latency;
    HitWhere::where_t hit_where;
 
    LOG_ASSERT_ERROR(cxl_id == INVALID_CXL_ID, "cxl vnserver cntlr only accepts virtual address");
    cxl_id = m_address_translator->getHome(address);
 
    /* Update VN */
+   if (m_vn_server_enabled)
    vn_latency = updateVN(address, requester, now, &m_dummy_shmem_perf); // always update VN in VN Vault, even when it is cached. 
 
    /* Encrypt Data and Gen MAC*/
@@ -204,7 +224,7 @@ SubsecondTime CXLVNServerCntlr::updateVNToCXL(IntPtr address, core_id_t requeste
 
 void CXLVNServerCntlr::enablePerfModel() 
 {
-   m_vn_perf_model->enable();
+   if (m_vn_perf_model) m_vn_perf_model->enable();
    for (cxl_id_t cxl_id = 0; cxl_id < m_address_translator->getnumCXLDevices(); cxl_id++){
       m_mee[cxl_id]->enablePerfModel();
    }
@@ -214,7 +234,7 @@ void CXLVNServerCntlr::enablePerfModel()
 
 void CXLVNServerCntlr::disablePerfModel() 
 {
-   m_vn_perf_model->disable();
+   if (m_vn_perf_model) m_vn_perf_model->disable();
    for (cxl_id_t cxl_id = 0; cxl_id < m_address_translator->getnumCXLDevices(); cxl_id++){
       m_mee[cxl_id]->disablePerfModel();
    }

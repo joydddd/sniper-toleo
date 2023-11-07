@@ -155,6 +155,15 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     template.append(('  num mac accesses', 'dram.mac-accesses', str))
     template.append(('  average data read latency', 'dram.avgdatalatency', format_ns(2)))
     template.append(('  average data bandwidth (GB/s)', 'dram.databw', lambda v: '%.2f' % v))
+    
+    # DEBUG:
+    results['dram-breakdown.data-fetch'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['dram.total-dram-delay'], results['dram.data-reads']))
+    results['dram-breakdown.mac-fetch'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['dram.total-mac-delay'], results['dram.data-reads']))
+    results['dram-breakdown.decrypt'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['dram.total-decrypt-delay'], results['dram.data-reads']))
+    template.append(('  DRAM latency breakdown', '', ''))
+    template.append(('    data fetch', 'dram-breakdown.data-fetch', format_ns(2)))
+    template.append(('    mac fetch', 'dram-breakdown.mac-fetch', format_ns(2)))
+    template.append(('    decrypt', 'dram-breakdown.decrypt', format_ns(2)))
 
   results['dram.accesses'] = map(sum, zip(results['dram.reads'], results['dram.writes']))
   results['dram.avglatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['dram.total-access-latency'], results['dram.accesses']))

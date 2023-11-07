@@ -26,13 +26,29 @@ DramMEECntlr::DramMEECntlr(MemoryManagerBase* memory_manager,
                   DramCntlrInterface* dram_cntlr, core_id_t core_id)
     :DramCntlrInterface(memory_manager, shmem_perf_model, cache_block_size, cxl_address_translator)
     , m_dram_cntlr(dram_cntlr)
+    , m_mee(NULL)
+    , m_mac_enabled(Sim()->getCfg()->getBool("perf_model/mee/enable_mac"))
+    , m_vn_enabled(Sim()->getCfg()->getBool("perf_model/mee/enable_vn"))
+    , f_trace(NULL)
+    , m_reads(0), m_writes(0)
+    , m_mac_reads(0), m_mac_writes(0)
+    , m_total_data_read_delay(SubsecondTime::Zero())
+    // DEBUG:
+    , m_total_mac_delay(SubsecondTime::Zero()), m_total_dram_delay(SubsecondTime::Zero()), m_total_decrypt_delay(SubsecondTime::Zero())
+
 {
     m_mee = new MEENaive(memory_manager, shmem_perf_model, m_address_translator, core_id, m_cache_block_size, NULL, this);
     registerStatsMetric("dram", memory_manager->getCore()->getId(), "data-reads", &m_reads);
     registerStatsMetric("dram", memory_manager->getCore()->getId(), "data-writes", &m_writes);
+    if (m_mac_enabled){
     registerStatsMetric("dram", memory_manager->getCore()->getId(), "mac-reads", &m_mac_reads);
     registerStatsMetric("dram", memory_manager->getCore()->getId(), "mac-writes", &m_mac_writes);
+    }
     registerStatsMetric("dram", memory_manager->getCore()->getId(), "total-data-read-delay", &m_total_data_read_delay);
+    // DEBUG:
+    registerStatsMetric("dram", memory_manager->getCore()->getId(), "total-mac-delay", &m_total_mac_delay);
+    registerStatsMetric("dram", memory_manager->getCore()->getId(), "total-dram-delay", &m_total_dram_delay);
+    registerStatsMetric("dram", memory_manager->getCore()->getId(), "total-decrypt-delay", &m_total_decrypt_delay);
 
 #ifdef MYLOG_ENABLED
    std::ostringstream trace_filename;
@@ -46,9 +62,12 @@ DramMEECntlr::DramMEECntlr(MemoryManagerBase* memory_manager,
 DramMEECntlr::~DramMEECntlr(){
     if (m_mee)
         delete m_mee;
+    if (f_trace)
+        fclose(f_trace);
 }
 
 SubsecondTime DramMEECntlr::getMAC(IntPtr mac_addr, core_id_t requester, Byte* buf, SubsecondTime now, ShmemPerf *perf){
+    LOG_ASSERT_ERROR(m_mac_enabled, "DramMEECntlr::getMAC: MAC is not enabled");
     MYLOG("[%d]getMAC @ %016lx ", requester, mac_addr);
     m_mac_reads++;
     /* read MAC to dram */
@@ -60,6 +79,7 @@ SubsecondTime DramMEECntlr::getMAC(IntPtr mac_addr, core_id_t requester, Byte* b
 }
 
 SubsecondTime DramMEECntlr::putMAC(IntPtr mac_addr, core_id_t requester, Byte* buf, SubsecondTime now){
+     LOG_ASSERT_ERROR(m_mac_enabled, "DramMEECntlr::getMAC: MAC is not enabled");
     MYLOG("[%d]putMAC @ %016lx ", requester, mac_addr);
     m_mac_writes++;
     /* write MAC to dram */
@@ -77,7 +97,7 @@ DramMEECntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_bu
     MYLOG("[%d]R @ %016lx ", requester, address);
     LOG_ASSERT_ERROR(is_virtual_addr, "DramMEECntlr::getDataFromDram: address is not virtual address"); 
     // DramMEECntlr only accepts virtual address
-    SubsecondTime latency;
+    SubsecondTime latency, decrypt_latency = SubsecondTime::Zero();
 
     /* get Data from local DRAM */
     SubsecondTime dram_latency;
@@ -90,26 +110,48 @@ DramMEECntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* data_bu
     HitWhere::where_t vn_hit_where;
     boost::tie(mac_latency, vn_latency, vn_hit_where) = m_mee->fetchMACVN(address, requester, now, perf);
     latency = mac_latency > dram_latency ? mac_latency : dram_latency;
-    if (vn_hit_where == HitWhere::CXL_VN){ // vn miss. vn request has already been sent to cxl
+    if (m_vn_enabled && vn_hit_where == HitWhere::CXL_VN){ // vn miss. vn request has already been sent to cxl
         hit_where = HitWhere::CXL_VN;
-    } else {
+    } else { // vn hit or no vn required
         /* if VN, MAC, salt and cipher are available */
-        latency += m_mee->DecryptVerifyData(address, requester, now + latency, perf); // decrypt data and verify MAC
+        decrypt_latency += m_mee->DecryptVerifyData(address, requester, now + latency, perf); // decrypt data and verify MAC
     }
 
     m_reads++;
-    m_total_data_read_delay += latency;
-    return boost::tuple<SubsecondTime, HitWhere::where_t>(latency, hit_where); // latency when data is ready
+    m_total_data_read_delay += latency + decrypt_latency;
+    m_total_dram_delay += dram_latency;
+    m_total_mac_delay += mac_latency > dram_latency ? mac_latency - dram_latency : SubsecondTime::Zero();
+    m_total_decrypt_delay += decrypt_latency;
+    return boost::tuple<SubsecondTime, HitWhere::where_t>(latency + decrypt_latency, hit_where); // latency when data is ready
 }
 
 boost::tuple<SubsecondTime, HitWhere::where_t>
 /* request updated VN, but not writing to dram yet */
 DramMEECntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, bool is_virtual_addr){
+    if (!m_vn_enabled){ // no VN
+         /* write latency is off critical path */
+        SubsecondTime dram_latency, encrypt_latency;
+        HitWhere::where_t hit_where;
+
+        // generates cipher and MAC. MAC is written to mee cache. 
+        encrypt_latency = m_mee->EncryptGenMAC(address, requester, now);
+
+        // write cipher to DRAM
+        boost::tie(dram_latency, hit_where) = m_dram_cntlr->putDataToDram(address, requester, data_buf, now + encrypt_latency);
+
+        m_writes++;
+        MYLOG("[%d]W @ %016lx ", requester, address);
+        return boost::tuple<SubsecondTime, HitWhere::where_t>(SubsecondTime::Zero(), HitWhere::DRAM);
+    }
+
+
+    // TODO: Add writeback cache for VN updates
     return boost::tuple<SubsecondTime, HitWhere::where_t>(SubsecondTime::Zero(), HitWhere::CXL_VN);
 }
 
 
 SubsecondTime DramMEECntlr::handleVNUpdateFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now){
+    LOG_ASSERT_ERROR(m_vn_enabled, "DramMEECntlr::handleVNverifyFromCXL: VN is not enabled");
     /* write latency is off critical path */
     SubsecondTime dram_latency, encrypt_latency;
     HitWhere::where_t hit_where;
@@ -126,6 +168,7 @@ SubsecondTime DramMEECntlr::handleVNUpdateFromCXL(IntPtr address, core_id_t requ
 }
 
 SubsecondTime DramMEECntlr::handleVNverifyFromCXL(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, ShmemPerf *perf){
+    LOG_ASSERT_ERROR(m_vn_enabled, "DramMEECntlr::handleVNverifyFromCXL: VN is not enabled");
     SubsecondTime mee_latency = m_mee->DecryptVerifyData(address, requester, now, perf);
     SubsecondTime dram_time = *((SubsecondTime*)data_buf);
     // LOG_ASSERT_ERROR(now + mee_latency > dram_time,

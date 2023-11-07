@@ -11,13 +11,15 @@ class DramMEECntlr : public DramCntlrInterface
     private: 
      DramCntlrInterface* m_dram_cntlr;
      MEEBase* m_mee;
+     bool m_mac_enabled, m_vn_enabled;
      FILE* f_trace;
      UInt64 m_reads, m_writes;
      UInt64 m_mac_reads, m_mac_writes;
      SubsecondTime m_total_data_read_delay;
+     // DEBUG:
+     SubsecondTime m_total_mac_delay, m_total_dram_delay, m_total_decrypt_delay;
 
- 
-     /* called by mee cntlr for getting MAC locally */
+      /* called by mee cntlr for getting MAC locally */
      SubsecondTime getMAC(IntPtr mac_addr, core_id_t requester, Byte* buf, SubsecondTime now, ShmemPerf *perf);
      SubsecondTime putMAC(IntPtr mac_addr, core_id_t requester, Byte* buf, SubsecondTime now);
 
