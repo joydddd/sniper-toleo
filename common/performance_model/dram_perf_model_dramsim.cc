@@ -163,9 +163,14 @@ void DramPerfModelDramSim::dramsimAdvance(SubsecondTime barrier_time){
    }
    m_bp_factor *= new_bp_factor*0.5 + 0.5;
    m_bp_factor = std::max(m_bp_factor, 1.1f);
-   m_bp_factor = std::min(m_bp_factor, 2.0f);
-   // if (new_bp_factor != 1.0)
-   //    fprintf(stderr, "final m_bp_fact %f\n", m_bp_factor);
+   m_bp_factor = std::min(m_bp_factor, 3.0f);
+
+   if ((m_bp_factor > 2.0 || m_bp_factor < 1.2) && new_bp_factor != 1.0) {
+       fprintf(
+           stderr,
+           "bp factor adjust %f final m_bp_fact %f, avg lat. %f ns\n",
+           new_bp_factor, m_bp_factor,(m_total_access_latency/m_num_accesses).getNS());
+   }
 }
 
 void DramPerfModelDramSim::dramsimStart(InstMode::inst_mode_t sim_status){

@@ -199,7 +199,7 @@ float DRAMsimCntlr::advance(SubsecondTime t_barrier){
 
          /* before bp_factor stablize */
          if (late_issue_reqs > epoch_total_launched) {
-            auto it_too_old = pending_reqs_.upper_bound( clk_ - (clk_ - check_point) * (0.5 / bp_factor));
+            auto it_too_old = pending_reqs_.upper_bound( clk_ - (clk_ - check_point) * 0.3);
             uint64_t too_old_reqs = std::distance(pending_reqs_.begin(), it_too_old);
             fprintf(stderr, "%d[DRAMSIM #%d] Erase %lu too old requests bp_factor = %f\n", dram_type ,ch_id, too_old_reqs, bp_factor);
             fprintf(stderr,
@@ -264,9 +264,13 @@ void DRAMsimCntlr::start(InstMode::inst_mode_t sim_status){
 void DRAMsimCntlr::stop(){
    if (status_ == DRAMSIM_NOT_STARTED) return ; // do nothing
    // Finish pending dram requests.
-   fprintf(stderr, "[DRAMSIM #%d] Trying to finish %d pending reqs\n", ch_id, pending_reqs_.size());
-   while(in_flight_reqs_.size() > 0 || pending_reqs_.size() > 0){ // If there are any pending requests and in_flight_reqs. runDRAMsim till finish all. 
+   fprintf(stderr, "[DRAMSIM #%d] Trying to finish %lu pending reqs, %lu in-flight reqs\n", ch_id, pending_reqs_.size(), in_flight_reqs_.size());
+   printPendingReqs();
+   while(in_flight_reqs_.size() > 0){ // If there are any pending requests and in_flight_reqs. runDRAMsim till finish all. 
       runDRAMsim(clk_ + epoch_size);
+      for (auto it = in_flight_reqs_.begin(); it != in_flight_reqs_.end(); it++){
+         LOG_ASSERT_ERROR(it->second + 10000 >= clk_, "[DRAMSIM #%d] clk_ %lu Long in-flight request 0x%lX @clk %lu\n", ch_id, clk_, it->first, it->second);
+      }
    }
    status_ = DRAMSIM_DONE;
       fprintf(stderr, "[DRAMSIM #%d] Finish DRAMsim3. Latest Request %ld ns @cycel %ld, clk %lu\n", ch_id, t_latest_req_.getNS(), clk_latest_req_, clk_);
