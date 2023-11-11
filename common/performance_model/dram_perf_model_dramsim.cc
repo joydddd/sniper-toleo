@@ -165,7 +165,7 @@ void DramPerfModelDramSim::dramsimAdvance(SubsecondTime barrier_time){
    m_bp_factor = std::max(m_bp_factor, 1.1f);
    m_bp_factor = std::min(m_bp_factor, 3.0f);
 
-   if ((m_bp_factor > 2.0 || m_bp_factor < 1.2) && new_bp_factor != 1.0) {
+   if ((m_bp_factor > 2.0 ) && new_bp_factor != 1.0) {
        fprintf(
            stderr,
            "bp factor adjust %f final m_bp_fact %f, avg lat. %f ns\n",
