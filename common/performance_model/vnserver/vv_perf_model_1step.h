@@ -11,7 +11,7 @@
 
 class VN_Page {
     public:
-    typedef enum { ONE_STEP = 16, VAULT = 128, OVERFLOW = 512} vn_comp_t;
+    typedef enum { ONE_STEP = 16, VAULT = 128, OVER_FLOW = 512} vn_comp_t;
 
     VN_Page(){}
     ~VN_Page(){}

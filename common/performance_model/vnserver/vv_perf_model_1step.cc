@@ -39,9 +39,9 @@ VN_Page::vn_comp_t VN_Page::update(UInt8 cl_num){
             break;
         case VAULT:
             ++vn_private[cl_num];
-            if (vn_private[cl_num] >= VAULT_PRIVATE_MAX) type = OVERFLOW;
+            if (vn_private[cl_num] >= VAULT_PRIVATE_MAX) type = OVER_FLOW;
             break;
-        case OVERFLOW:
+        case OVER_FLOW:
             ++vn_private[cl_num];
             break;
     }
@@ -59,7 +59,7 @@ UInt32 VN_Page::reset(){
     if (type == ONE_STEP) {
         ret = m_total_offset == 0 ? 0 : 64 - m_total_offset; // pages that are not written to need a forced update
     }
-    if (type == VAULT || type == OVERFLOW) {
+    if (type == VAULT || type == OVER_FLOW) {
         ret = 64;
         return 64;
     }

@@ -27,12 +27,12 @@ void Vault_Page::write(UInt8 cl_num){
     }
 
     type = gen_type();
-    if (type == VAULT || type == OVERFLOW) sparse = true;
+    if (type == VAULT || type == OVER_FLOW) sparse = true;
 }
 
 Vault_Page::vn_comp_t Vault_Page::gen_type(){
     if (!written) return READ_ONLY;
-    if (shared_vn != 0) return OVERFLOW;
+    if (shared_vn != 0) return OVER_FLOW;
     max_private = 0, min_private = UINT8_MAX;
     for (int i = 0; i < 64; i++){
         if (private_vn[i] > max_private) max_private = private_vn[i];
@@ -117,8 +117,8 @@ void DramTraceAnalyzer::AnalyzeDramAccess(){
                 m_page_multi_write++;
                 m_page_dirty++;
                 break;
-            case Vault_Page::OVERFLOW:
-                fprintf(f_log, "%lx OVERFLOW shared %d \n", it->first, it->second.shared_vn);
+            case Vault_Page::OVER_FLOW:
+                fprintf(f_log, "%lx OVER_FLOW shared %d \n", it->first, it->second.shared_vn);
                 m_page_multi_write++;
                 m_page_dirty++;
                

@@ -9,7 +9,7 @@
 
 class Vault_Page {
     public:
-    typedef enum { READ_ONLY = 0, UNIFORM_WRITE, ONE_STEP, VAULT, OVERFLOW } vn_comp_t;
+    typedef enum { READ_ONLY = 0, UNIFORM_WRITE, ONE_STEP, VAULT, OVER_FLOW } vn_comp_t;
 
     bool written = false;
     bool sparse = false; // if VN is more than 1 apart during ROI. 

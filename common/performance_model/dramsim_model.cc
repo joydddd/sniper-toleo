@@ -3,6 +3,8 @@
 #include "config.h"
 #include "config.hpp"
 #include <cstdlib>
+#include <stdio.h>
+#include <stdlib.h>
 
 #if 1
 #define MYTRACE_ENABLED
@@ -54,7 +56,10 @@ DRAMsimCntlr::DRAMsimCntlr(uint32_t _dram_cntlr_id, uint32_t _ch_id, SubsecondTi
    total_read_lat(0),
    num_of_reads(0)
 {
-   std::string config(Sim()->getCfg()->getString(config_prefix + "config").c_str());
+   const char* sniper_root = getenv("SNIPER_ROOT");
+   fprintf(stderr, "SNIPER ROOT %s\n", sniper_root);
+   std::string config = std::string(sniper_root) + "/DRAMsim3/configs/" + Sim()->getCfg()->getString(config_prefix + "config").c_str() + ".ini";
+   std::cerr << "DRAMsim3 config " << config;
    std::string output_dir(Sim()->getCfg()->getString(config_prefix + "output_dir").c_str());
    if (dram_type == DramType::CXL_MEMORY || dram_type == DramType::CXL_VN) 
       output_dir.append("/dramsim_cxl" + std::to_string(dram_cntlr_id) + "_" + std::to_string(ch_id));
