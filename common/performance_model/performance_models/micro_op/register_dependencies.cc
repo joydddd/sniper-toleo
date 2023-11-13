@@ -3,7 +3,14 @@
 
 RegisterDependencies::RegisterDependencies()
 {
+   producers = new uint64_t[Sim()->getDecoder()->last_reg() + 1];
    clear();
+}
+
+RegisterDependencies::~RegisterDependencies()
+{
+   delete[] producers;
+   producers = NULL;
 }
 
 void RegisterDependencies::setDependencies(DynamicMicroOp& microOp, uint64_t lowestValidSequenceNumber)
