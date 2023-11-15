@@ -203,7 +203,7 @@ float DRAMsimCntlr::advance(SubsecondTime t_barrier){
          // }
 
          /* before bp_factor stablize */
-         if (late_issue_reqs > epoch_total_launched) {
+         if (late_issue_reqs > epoch_total_launched*3) {
             auto it_too_old = pending_reqs_.upper_bound( clk_ - (clk_ - check_point) * 0.3);
             uint64_t too_old_reqs = std::distance(pending_reqs_.begin(), it_too_old);
             fprintf(stderr, "%d[DRAMSIM #%d] Erase %lu too old requests bp_factor = %f\n", dram_type ,ch_id, too_old_reqs, bp_factor);
