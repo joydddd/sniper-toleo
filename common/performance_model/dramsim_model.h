@@ -21,6 +21,9 @@ class DRAMsimCntlr {
     SubsecondTime epoch_period;// period of one epoch
     uint32_t ch_id, dram_cntlr_id;
 
+    /* for profiling */
+    UInt64 total_busy_cycles = 0, total_idle_cycles = 0;
+
     bool log_trace = false;
 
     enum DramSimStatus{
@@ -78,6 +81,7 @@ class DRAMsimCntlr {
     void WriteCallBack(uint64_t addr);
     uint64_t runDRAMsim(uint64_t target_cycle);// return number of memory requests issued
     void printPendingReqs();
+    void printBackPresure();
    public:
       DRAMsimCntlr(uint32_t dram_cntlr_id, uint32_t ch_id, SubsecondTime default_latency, DramType dram_type = DramType::SYSTEM_DRAM, bool log_trace = false);
       ~DRAMsimCntlr();
