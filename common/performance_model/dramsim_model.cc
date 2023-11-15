@@ -108,7 +108,10 @@ uint64_t DRAMsimCntlr::runDRAMsim(uint64_t target_cycle){ // run DRAMsim until c
             in_flight_reqs_.insert(std::make_pair(it->second, clk_));
             it = pending_reqs_.erase(it);
             reqs_issued++;
+            total_busy_cycles++;
          }
+      } else {
+          total_idle_cycles++;
       }
       mem_system_->ClockTick();
    }
@@ -184,6 +187,7 @@ float DRAMsimCntlr::advance(SubsecondTime t_barrier){
 
       epoch_total_launched += mem_reqs_issued;
       if (clk_ - check_point > 10000 && sim_status_ == SIM_ROI){  // no bp_factor adjust in FASTFORWARD region
+         printBackPresure();
          // check if there is any long in-flight requests
          for (auto it = in_flight_reqs_.begin(); it != in_flight_reqs_.end(); it++){
             LOG_ASSERT_ERROR(it->second + 10000 >= check_point, "[DRAMSIM #%d] clk_ %lu Long in-flight request 0x%lX @clk %lu\n", ch_id, clk_, it->first, it->second);
@@ -270,7 +274,6 @@ void DRAMsimCntlr::stop(){
    if (status_ == DRAMSIM_NOT_STARTED) return ; // do nothing
    // Finish pending dram requests.
    fprintf(stderr, "[DRAMSIM #%d] Trying to finish %lu pending reqs, %lu in-flight reqs\n", ch_id, pending_reqs_.size(), in_flight_reqs_.size());
-   printPendingReqs();
    while(in_flight_reqs_.size() > 0){ // If there are any pending requests and in_flight_reqs. runDRAMsim till finish all. 
       runDRAMsim(clk_ + epoch_size);
       for (auto it = in_flight_reqs_.begin(); it != in_flight_reqs_.end(); it++){
@@ -293,6 +296,13 @@ void DRAMsimCntlr::printPendingReqs(){
    for (auto it = pending_reqs_.begin(); it != pending_reqs_.end(); it++){
       fprintf(stderr, "0x%012lX %s %lu\n", it->second & (~TRANS_IS_WRITE_MASK), it->second & TRANS_IS_WRITE_MASK ?"WRITE":"READ", it->first);
    }
+}
+
+void DRAMsimCntlr::printBackPresure(){
+    fprintf(stderr, "[DRAMSIM #%d] Occupancy %f, Pending %f, Idle %d\n", ch_id,
+            (float)total_busy_cycles / clk_,
+            ((float)clk_ - total_idle_cycles - total_busy_cycles) / clk_,
+            total_idle_cycles / clk_);
 }
 
 DRAMsimCntlr::LatencyGenerator::LatencyGenerator(String config_prefix){

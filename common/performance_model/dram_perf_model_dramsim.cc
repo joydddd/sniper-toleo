@@ -56,7 +56,7 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
    if(Sim()->getCfg()->getBool(m_config_prefix + "queue_model/enabled")){
       m_bp_factor = Sim()->getCfg()->getFloat(m_config_prefix + "queue_model/bp_factor");
       ComponentPeriod dram_period = m_dramsim[0]->getDramPeriod();
-      m_burst_processing_time = dram_period.getPeriod() / m_dramsim_channels; // devide by 2 for DDR, divide by number of channels for parallel channels
+      m_burst_processing_time = dram_period.getPeriod() / m_dramsim_channels / 2; // devide by 2 for DDR, divide by number of channels for parallel channels
       m_dram_burst_size = m_dramsim[0]->getBurstSize();  // in bytes
       m_backpressure_queue = QueueModel::create(
          dram_type == DramType::SYSTEM_DRAM ? "dram-queue" : "cxl-dram-queue", 
@@ -121,7 +121,9 @@ DramPerfModelDramSim::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size, 
 
    SubsecondTime bp_delay = SubsecondTime::Zero();
    if (m_backpressure_queue){
-      SubsecondTime queueing_delay = m_backpressure_queue->computeQueueDelay(pkt_time, m_burst_processing_time * m_bp_factor * (pkt_size / m_dram_burst_size) , requester);
+      SubsecondTime processing_time = m_burst_processing_time * m_bp_factor * (pkt_size/ m_dram_burst_size);
+      SubsecondTime queueing_delay = m_backpressure_queue->computeQueueDelay(
+          pkt_time, processing_time, requester);
       bp_delay = queueing_delay > m_dramsim_buffering_delay ? queueing_delay - m_dramsim_buffering_delay : SubsecondTime::Zero(); 
       // ignore backward pressure if dram buffer is able to handle. 
    }
@@ -163,9 +165,9 @@ void DramPerfModelDramSim::dramsimAdvance(SubsecondTime barrier_time){
    }
    m_bp_factor *= new_bp_factor*0.5 + 0.5;
    m_bp_factor = std::max(m_bp_factor, 1.1f);
-   m_bp_factor = std::min(m_bp_factor, 5.0f);
+   m_bp_factor = std::min(m_bp_factor, 10.0f);
 
-   if ((m_bp_factor > 2.0 ) && new_bp_factor != 1.0) {
+   if ((m_bp_factor > 3 ) && new_bp_factor != 1.0) {
        fprintf(
            stderr,
            "bp factor adjust %f final m_bp_fact %f, avg lat. %f ns\n",

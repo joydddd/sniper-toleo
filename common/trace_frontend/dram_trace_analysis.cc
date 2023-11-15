@@ -13,6 +13,8 @@
 
 #define K1 1000
 #define M1 (K1 * K1)
+#define M10 (10 * M1)
+#define M100 (100 * M1)
 
 void Vault_Page::write(UInt8 cl_num){
     if (!written) {
@@ -188,6 +190,41 @@ void DramTraceAnalyzer::periodic(UInt64 icount){
 
     fprintf(f_csv, "%lu\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\n",  icount, m_page_touched, page_read_only, page_1write, page_flat, page_uneven, page_full);
     fflush(f_csv);
+     m_ins_count_next += 32 * M10; // every 1m ins per core
 
-    m_ins_count_next += 32 * M1; // every 1m ins per core
+    if (m_ins_count_epoch_next > icount) return;
+    // Reaching the end of epoch
+    GarbageCollection();
+}
+
+void DramTraceAnalyzer::GarbageCollection(){
+    uint64_t num_unevent_recylces = 0, num_full_recylces = 0;
+    /* Fold all the pages that are sparse and not touched in the last epoch */
+    for(auto page_it = m_vault_vn.begin(); page_it != m_vault_vn.end(); page_it++){
+        if (page_it->second.sparse && !page_it->second.epoch) { // if this page is sparse and not touched in the last epoch
+            if (page_it->second.type == Vault_Page::VAULT) num_unevent_recylces++;
+            else if (page_it->second.type == Vault_Page::OVER_FLOW) num_full_recylces++;
+            // reset page 
+            for (int i = 0; i < 64; i++){
+                page_it->second.private_vn[i] = 0;
+            }
+            page_it->second.written = false;
+            page_it->second.sparse = false;
+            page_it->second.epoch = false;
+            page_it->second.type = Vault_Page::READ_ONLY;
+            page_it->second.shared_vn = 0;
+            page_it->second.max_private = 0;
+            page_it->second.min_private = 0;
+        }
+    }
+    EndEpoch();
+    fprintf(f_csv,  "%s\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\n", "garbage", 0, 0, 0, 0, num_unevent_recylces, num_full_recylces);
+    fflush(f_csv);
+}
+
+void DramTraceAnalyzer::EndEpoch(){
+    /* Clear All the Epoch bits */
+    for(auto page_it = m_vault_vn.begin(); page_it != m_vault_vn.end(); page_it++){
+        page_it->second.epoch = false;
+    }
 }
