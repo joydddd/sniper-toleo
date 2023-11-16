@@ -44,8 +44,8 @@ QueueModelWindowedMG1::computeQueueDelay(SubsecondTime pkt_time, SubsecondTime p
       t_queue = SubsecondTime::PS(arrival_rate * service_time_Es2 / (2 * (1. - utilization)));
 
       // Our memory is limited in time to m_window_size. It would be strange to return more latency than that.
-      if (t_queue > m_window_size)
-         t_queue = m_window_size;
+      // if (t_queue > m_window_size)
+      //    t_queue = m_window_size;
    }
 
    addItem(pkt_time, processing_time);
