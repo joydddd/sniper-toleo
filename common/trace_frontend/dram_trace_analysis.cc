@@ -11,12 +11,12 @@
 #define VAULT_PRIVATE_BITS 7
 #define VAULT_PRIVATE_MAX (1 << VAULT_PRIVATE_BITS) - 1
 
-#define K1 1000
-#define K10 (10 * K1)
-#define K100 (100 * K1)
-#define M1 (K1 * K1)
-#define M10 (10 * M1)
-#define M100 (100 * M1)
+#define K1 1000UL
+#define K10 (10UL * K1)
+#define K100 (100UL * K1)
+#define M1 (1000UL * K1)
+#define M10 (10UL * M1)
+#define M100 (100UL * M1)
 
 void Vault_Page::write(UInt8 cl_num){
     if (!written) {
