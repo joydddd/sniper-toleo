@@ -191,12 +191,12 @@ void DramTraceAnalyzer::periodic(UInt64 icount){
 
     fprintf(f_csv, "%lu\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\n",  icount, m_page_touched, page_read_only, page_1write, page_flat, page_uneven, page_full);
     fflush(f_csv);
-     m_ins_count_next = icount +  32 * K10; // every 10m ins per core
+     m_ins_count_next = icount +  32 * M10; // every 10m ins per core
 
     if (m_ins_count_epoch_next > icount) return;
     // Reaching the end of epoch
     GarbageCollection();
-    m_ins_count_epoch_next = icount + 32 * K100; // every 100m ins per core
+    m_ins_count_epoch_next = icount + 32 * M100; // every 100m ins per core
 }
 
 void DramTraceAnalyzer::GarbageCollection(){
