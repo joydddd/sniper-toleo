@@ -12,6 +12,8 @@
 #define VAULT_PRIVATE_MAX (1 << VAULT_PRIVATE_BITS) - 1
 
 #define K1 1000
+#define K10 (10 * K1)
+#define K100 (100 * K1)
 #define M1 (K1 * K1)
 #define M10 (10 * M1)
 #define M100 (100 * M1)
@@ -165,7 +167,6 @@ void DramTraceAnalyzer::InitDramAccess(){
 
 void DramTraceAnalyzer::periodic(UInt64 icount){
     if (!enable) return;
-    fprintf(stderr, "DramTraceAnalyzer::periodic %lu m_ins_count_next %lu\n", icount, m_ins_count_next);
     if (m_ins_count_next > icount) return;
     UInt64 page_read_only =0, page_1write =0, page_flat = 0, page_uneven = 0, page_full = 0;
 
@@ -190,11 +191,12 @@ void DramTraceAnalyzer::periodic(UInt64 icount){
 
     fprintf(f_csv, "%lu\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\n",  icount, m_page_touched, page_read_only, page_1write, page_flat, page_uneven, page_full);
     fflush(f_csv);
-     m_ins_count_next += 32 * M10; // every 1m ins per core
+     m_ins_count_next = icount +  32 * K10; // every 10m ins per core
 
     if (m_ins_count_epoch_next > icount) return;
     // Reaching the end of epoch
     GarbageCollection();
+    m_ins_count_epoch_next = icount + 32 * K100; // every 100m ins per core
 }
 
 void DramTraceAnalyzer::GarbageCollection(){
@@ -218,7 +220,7 @@ void DramTraceAnalyzer::GarbageCollection(){
         }
     }
     EndEpoch();
-    fprintf(f_csv,  "%s\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\n", "garbage", 0, 0, 0, 0, num_unevent_recylces, num_full_recylces);
+    fprintf(f_csv,  "%s\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\n", "garbage", 0, 0, 0, 0, num_unevent_recylces, num_full_recylces);
     fflush(f_csv);
 }
 
