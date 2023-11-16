@@ -35,6 +35,7 @@ void Vault_Page::write(UInt8 cl_num){
 
     type = gen_type();
     if (type == VAULT || type == OVER_FLOW) sparse = true;
+    epoch = true;
 }
 
 Vault_Page::vn_comp_t Vault_Page::gen_type(){
