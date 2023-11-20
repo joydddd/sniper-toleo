@@ -196,7 +196,7 @@ void DramTraceAnalyzer::periodic(UInt64 icount){
 
     if (m_ins_count_epoch_next > icount) return;
     // Reaching the end of epoch
-    GarbageCollection();
+    // GarbageCollection();
     m_ins_count_epoch_next = icount + 32 * M100; // every 100m ins per core
 }
 

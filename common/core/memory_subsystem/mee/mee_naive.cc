@@ -50,13 +50,14 @@ MEENaive::MEENaive(MemoryManagerBase *memory_manager,
     "perf_model/mee/cache/tags_access_time", m_core_id));
     m_mac_cache_data_latency = SubsecondTime::NS(Sim()->getCfg()->getIntArray(
     "perf_model/mee/cache/data_access_time", m_core_id));
+    UInt32 mac_cache_associativity = Sim()->getCfg()->getInt("perf_model/mee/cache/associativity");
 
     registerStatsMetric("mee", m_core_id, "mac-misses", &m_mac_misses);
 
     m_mac_cache = new Cache(
         "mac-cache", "perf_model/mee/cache", m_core_id, 
-        1,                                // num sets
-        m_mac_cache_size / getCacheBlockSize(),             // associativity
+        m_mac_cache_size / getCacheBlockSize() / mac_cache_associativity, // num sets
+        mac_cache_associativity,             // associativity
         getCacheBlockSize(),
         Sim()->getCfg()->getStringArray("perf_model/mee/cache/replacement_policy", m_core_id),
         CacheBase::SHARED_CACHE,
