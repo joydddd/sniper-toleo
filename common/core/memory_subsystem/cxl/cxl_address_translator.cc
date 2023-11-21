@@ -10,8 +10,8 @@
 
 #define MAX_PAGE_NUM_BITS 56
 
-#define ONE_G (float)1000*1000*1000
-#define ONE_M  (float)1000*1000
+#define ONE_G ((float)1000*1000*1000)
+#define ONE_M  ((float)1000*1000)
 
 // DEBUG:
 #if 0
@@ -143,14 +143,14 @@ IntPtr CXLAddressTranslator::getMACAddrFromVirtual(IntPtr virtual_address){
 IntPtr CXLAddressTranslator::getMACAddrFromPhysical(IntPtr phy_addr, cxl_id_t cxl_id){
    LOG_ASSERT_ERROR(m_has_mac, "getMACaddr when mac is not enabled\n");
 
-   IntPtr mac_addr = m_mac_offset[cxl_id];
+   IntPtr mac_addr = cxl_id == HOST_CXL_ID ? m_mac_offset[m_num_cxl_devs] : m_mac_offset[cxl_id];
    // Align physical address to cacheline * #mac/ CL boundary, and map to mac region
    mac_addr += phy_addr / (m_mac_per_cl * m_cacheline_size) * m_cacheline_size;
 
    LOG_ASSERT_ERROR((mac_addr & (m_cacheline_size - 1)) == 0,
-                    "physical addr 0x%12lx MAC addr 0x%12lx is "
+                    "[CXL %d] physical addr 0x%12lx MAC addr 0x%12lx is "
                     "not aligned to cacheline (mac offset 0x%12lx)",
-                     phy_addr, mac_addr, m_mac_offset[cxl_id]);
+                     cxl_id, phy_addr, mac_addr, cxl_id == HOST_CXL_ID ? m_mac_offset[m_num_cxl_devs] : m_mac_offset[cxl_id]);
    return mac_addr;
 }
 
