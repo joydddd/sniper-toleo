@@ -89,6 +89,7 @@ CXLAddressTranslator::CXLAddressTranslator(
 
    // Remap MAC address to a dedicated area: last 1/9 of address space. 
    m_has_mac = Sim()->getCfg()->getBool("perf_model/mee/enable")
+         && Sim()->getCfg()->getString("perf_model/mee/type") == String("toleo")
          && Sim()->getCfg()->getBool("perf_model/mee/enable_mac"); // if allocate extra space for mac. 
    if (m_has_mac) {
       m_mac_per_cl = Sim()->getCfg()->getInt("perf_model/mee/mac_per_cl") ; // mac_length in bits

@@ -186,7 +186,7 @@ float DRAMsimCntlr::advance(SubsecondTime t_barrier){
       float bp_factor = 1.0f;
 
       epoch_total_launched += mem_reqs_issued;
-      if (clk_ - check_point > 10000 && sim_status_ == SIM_ROI){  // no bp_factor adjust in FASTFORWARD region
+      if (clk_ - check_point > 100000 && sim_status_ == SIM_ROI){  // no bp_factor adjust in FASTFORWARD region
          printBackPresure();
          // check if there is any long in-flight requests
          for (auto it = in_flight_reqs_.begin(); it != in_flight_reqs_.end(); it++){

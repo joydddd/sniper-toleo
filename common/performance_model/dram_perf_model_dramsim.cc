@@ -56,7 +56,7 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
    if(Sim()->getCfg()->getBool(m_config_prefix + "queue_model/enabled")){
       m_bp_factor = Sim()->getCfg()->getFloat(m_config_prefix + "queue_model/bp_factor");
       ComponentPeriod dram_period = m_dramsim[0]->getDramPeriod();
-      m_burst_processing_time = dram_period.getPeriod() / m_dramsim_channels / 2; // devide by 2 for DDR, divide by number of channels for parallel channels
+      m_burst_processing_time = dram_period.getPeriod() / m_dramsim_channels / 2 / m_dramsim[0]->getLinkNumber(); // devide by 2 for DDR, divide by number of channels for parallel channels
       m_dram_burst_size = m_dramsim[0]->getBurstSize();  // in bytes
       m_backpressure_queue = QueueModel::create(
          dram_type == DramType::SYSTEM_DRAM ? "dram-queue" : "cxl-dram-queue", 

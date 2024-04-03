@@ -26,6 +26,7 @@ class SimUserWarmupROI:
     elif (arg == 1): # stop
       print ('[SCRIPT] End of ROI: beginning ROI')
       sim.control.set_roi(False)
+      sim.control.abort()
     elif (arg == 2): # warmup start
       print ('[SCRIPT] Start of WARMUP: beginning WARMUP')
       sim.control.set_instrumentation_mode(sim.control.WARMUP)

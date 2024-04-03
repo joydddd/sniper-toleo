@@ -5,6 +5,7 @@
 #include "dram_cache.h"
 #include "dram_mee_cntlr.h"
 #include "cxl_vnserver_cntlr.h"
+#include "cxl_invisimem_cntlr.h"
 #include "mee_naive.h"
 #include "tlb.h"
 #include "simulator.h"
@@ -256,8 +257,12 @@ MemoryManager::MemoryManager(Core* core,
          }
       }
       Sim()->getStatsManager()->logTopology("cxl-cntlr", core->getId(), core->getId());
-      m_cxl_cntlr = new CXLCntlr(this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator, cxl_dev_connected);
-      if (Sim()->getCfg()->getBool("perf_model/mee/enable")) {
+      if (Sim()->getCfg()->getBool("perf_model/mee/enable") && Sim()->getCfg()->getString("perf_model/mee/type") == "invisimem") {
+         m_cxl_cntlr = (CXLCntlr*) new CXLInvisiMemCntlr(this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator, cxl_dev_connected);
+      } else {
+         m_cxl_cntlr = new CXLCntlr(this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator, cxl_dev_connected);
+      }
+      if (Sim()->getCfg()->getBool("perf_model/mee/enable") && Sim()->getCfg()->getString("perf_model/mee/type") == "toleo") {
          m_cxl_vnserver_cntlr = new CXLVNServerCntlr(this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator, m_cxl_cntlr, core->getId());
       }
    }
@@ -308,7 +313,7 @@ MemoryManager::MemoryManager(Core* core,
           this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator);
       Sim()->getStatsManager()->logTopology("dram-cntlr", core->getId(), core->getId());
       DramCntlrInterface* dram_cntlr_interface = m_dram_cntlr;
-      if (Sim()->getCfg()->getBool("perf_model/mee/enable")) {
+      if (Sim()->getCfg()->getBool("perf_model/mee/enable") && Sim()->getCfg()->getString("perf_model/mee/type") == "toleo"){
          m_dram_mee_cntlr = new DramMEECntlr(this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator, m_dram_cntlr, core->getId());
          dram_cntlr_interface = m_dram_mee_cntlr;
          Sim()->getStatsManager()->logTopology("mee-cntlr", core->getId(), core->getId());

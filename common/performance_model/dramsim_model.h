@@ -90,6 +90,7 @@ class DRAMsimCntlr {
       float advance(SubsecondTime t_barrier); // return updated bandwidth overflow factor
       SubsecondTime addTrans(SubsecondTime t_sniper, IntPtr addr, bool is_write);
       ComponentPeriod getDramPeriod(){return dram_period;}
+      UInt32 getLinkNumber(){return mem_system_->GetLinksNum();}
       UInt32 getBurstSize(){return mem_system_->GetBurstLength();} // in bytes
       UInt32 getDramQueueSize(){return mem_system_->GetQueueSize();} // dramqueue size in number of transactions
 };
