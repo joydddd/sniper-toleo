@@ -89,7 +89,6 @@ CXLAddressTranslator::CXLAddressTranslator(
 
    // Remap MAC address to a dedicated area: last 1/9 of address space. 
    m_has_mac = Sim()->getCfg()->getBool("perf_model/mee/enable")
-         && Sim()->getCfg()->getString("perf_model/mee/type") == String("toleo")
          && Sim()->getCfg()->getBool("perf_model/mee/enable_mac"); // if allocate extra space for mac. 
    if (m_has_mac) {
       m_mac_per_cl = Sim()->getCfg()->getInt("perf_model/mee/mac_per_cl") ; // mac_length in bits
@@ -134,11 +133,21 @@ CXLAddressTranslator::CXLAddressTranslator(
    
 }
 
-IntPtr CXLAddressTranslator::getMACAddrFromVirtual(IntPtr virtual_address){
+IntPtr CXLAddressTranslator::getMACAddrFromVirtual_aligned(IntPtr virtual_address){
    IntPtr phy_addr = getPhyAddress(virtual_address);
    cxl_id_t cxl_id = getHome(virtual_address);
-   return getMACAddrFromPhysical(phy_addr, cxl_id);
-   
+   return getMACAddrFromPhysical_aligned(phy_addr, cxl_id);
+}
+
+IntPtr CXLAddressTranslator::getMACAddrFromPhysical_aligned(IntPtr phy_addr, cxl_id_t cxl_id){
+   IntPtr mac_addr = getMACAddrFromPhysical(phy_addr, cxl_id);
+   // Align to cacheline size
+   mac_addr = mac_addr / m_cacheline_size * m_cacheline_size;
+
+   LOG_ASSERT_ERROR((mac_addr & (m_cacheline_size - 1)) == 0,
+                    "[CXL %d] physical addr 0x%12lx MAC addr 0x%12lx is "
+                    "not aligned to cacheline (mac offset 0x%12lx)",
+                     cxl_id, phy_addr, mac_addr, cxl_id == HOST_CXL_ID ? m_mac_offset[m_num_cxl_devs] : m_mac_offset[cxl_id]);
 }
 
 IntPtr CXLAddressTranslator::getMACAddrFromPhysical(IntPtr phy_addr, cxl_id_t cxl_id){
@@ -146,14 +155,11 @@ IntPtr CXLAddressTranslator::getMACAddrFromPhysical(IntPtr phy_addr, cxl_id_t cx
 
    IntPtr mac_addr = cxl_id == HOST_CXL_ID ? m_mac_offset[m_num_cxl_devs] : m_mac_offset[cxl_id];
    // Align physical address to cacheline * #mac/ CL boundary, and map to mac region
-   mac_addr += phy_addr / (m_mac_per_cl * m_cacheline_size) * m_cacheline_size;
-
-   LOG_ASSERT_ERROR((mac_addr & (m_cacheline_size - 1)) == 0,
-                    "[CXL %d] physical addr 0x%12lx MAC addr 0x%12lx is "
-                    "not aligned to cacheline (mac offset 0x%12lx)",
-                     cxl_id, phy_addr, mac_addr, cxl_id == HOST_CXL_ID ? m_mac_offset[m_num_cxl_devs] : m_mac_offset[cxl_id]);
+   mac_addr += phy_addr / m_mac_per_cl;
+   
    return mac_addr;
 }
+
 
 CXLAddressTranslator::~CXLAddressTranslator()
 {

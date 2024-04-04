@@ -71,10 +71,14 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
    m_dram_request_size = m_dramsim[0]->getDramBlockSize();  // bytes
 
    if (dram_type == DramType::SYSTEM_DRAM) {
+      registerStatsMetric("dram", core_id, "total-bytes-accessed", &m_total_bytes_accessed);
       registerStatsMetric("dram", core_id, "total-access-latency", &m_total_access_latency);
       registerStatsMetric("dram", core_id, "total-backpressure-latency", &m_total_bp_latency);
       registerStatsMetric("dram", core_id, "total-read-latency", &m_total_read_latency);
    } else if (dram_type == DramType::CXL_MEMORY || dram_type == DramType::CXL_VN){
+      registerStatsMetric("cxl-dram", core_id, "reads", &m_reads);
+      registerStatsMetric("cxl-dram", core_id, "writes", &m_writes);
+      registerStatsMetric("cxl-dram", core_id, "total-bytes-accessed", &m_total_bytes_accessed);
       registerStatsMetric("cxl-dram", core_id, "total-access-latency", &m_total_access_latency);
       registerStatsMetric("cxl-dram", core_id, "total-backpressure-latency", &m_total_bp_latency);
       registerStatsMetric("cxl-dram", core_id, "total-read-latency", &m_total_read_latency);
@@ -131,11 +135,14 @@ DramPerfModelDramSim::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size, 
    }
 
    SubsecondTime dramsim_latency = SubsecondTime::Zero();
-   uint32_t dramsim_ch_id = (address / m_cache_block_size) % m_dramsim_channels;
-   IntPtr ch_addr = (address/m_cache_block_size) / m_dramsim_channels * m_cache_block_size;
-   int num_of_dram_req = pkt_size / m_dram_request_size;
+   int num_of_dram_req = (pkt_size + m_dram_request_size - 1 ) / m_dram_request_size; // Round up number of requests
    for (int i = 0; i < num_of_dram_req; i++){
-      SubsecondTime burst_latency = m_dramsim[dramsim_ch_id]->addTrans(pkt_time + bp_delay, ch_addr + i*m_dram_request_size, access_type == DramCntlrInterface::WRITE);
+      IntPtr req_address = address + i * m_dram_request_size;
+      uint32_t dramsim_ch_id = (req_address / m_dram_request_size) % m_dramsim_channels;
+      IntPtr ch_addr = (req_address/m_dram_request_size) / m_dramsim_channels * m_dram_request_size;
+      // fprintf(stderr, "dram_perf_model_dramsim.cc: addr 0x%lx ch %d ch_draam %lx dram req %d/%d\n", req_address, dramsim_ch_id, ch_addr, i+1, num_of_dram_req);
+
+      SubsecondTime burst_latency = m_dramsim[dramsim_ch_id]->addTrans(pkt_time + bp_delay, ch_addr, access_type == DramCntlrInterface::WRITE);
       dramsim_latency = burst_latency > dramsim_latency ? burst_latency : dramsim_latency;
    }
 
@@ -144,9 +151,11 @@ DramPerfModelDramSim::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size, 
    switch(access_type){
       case DramCntlrInterface::READ:
          MYTRACE("0x%016lx\tREAD\t%lu", address, dramsim_latency.getNS());
+         m_reads++;
          break;
       case DramCntlrInterface::WRITE:
          MYTRACE("0x%016lx\tWRITE\t%lu", address, dramsim_latency.getNS());
+         m_writes++;
          break;
       default:
          LOG_ASSERT_ERROR(false, "Unsupported DramCntlrInterface::access_t(%u)", access_type);
@@ -157,6 +166,7 @@ DramPerfModelDramSim::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size, 
 
    // Update Memory Counters only for reads
    m_num_accesses ++;
+   m_total_bytes_accessed += pkt_size;
    m_total_access_latency += access_latency;
    m_total_bp_latency += bp_delay;
    if (access_type == DramCntlrInterface::READ)

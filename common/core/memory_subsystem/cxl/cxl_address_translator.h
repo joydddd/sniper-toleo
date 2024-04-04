@@ -33,8 +33,9 @@ class CXLAddressTranslator
       void printPageTable();
 
       // generated (physical) MAC address for a given virtual address. Assigned to dedicated MAC region. 
-      IntPtr getMACAddrFromVirtual(IntPtr virtual_address); 
-      IntPtr getMACAddrFromPhysical(IntPtr phy_addr, cxl_id_t cxl_id);
+      IntPtr getMACAddrFromVirtual_aligned(IntPtr virtual_address);  // return address of the cacheline it belongs to. 
+      IntPtr getMACAddrFromPhysical_aligned(IntPtr phy_addr, cxl_id_t cxl_id); // return address of the cacheline it belongs to. 
+      IntPtr getMACAddrFromPhysical(IntPtr phy_addr, cxl_id_t cxl_id); // return address to start of MAC. 
    
 
      private:
