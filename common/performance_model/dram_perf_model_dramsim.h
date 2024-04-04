@@ -28,6 +28,7 @@ class DramPerfModelDramSim : public DramPerfModel {
       SubsecondTime m_burst_processing_time;
       float m_bp_factor;
       UInt32 m_dram_burst_size;
+      UInt32 m_dram_request_size;  // bytes
 
       ShmemPerfModel* m_shmem_perf_model;
       ShmemPerfModel* getShmemPerfModel() { return m_shmem_perf_model; }

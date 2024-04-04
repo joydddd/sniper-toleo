@@ -102,7 +102,7 @@ uint64_t DRAMsimCntlr::runDRAMsim(uint64_t target_cycle){ // run DRAMsim until c
          bool is_write = it->second >> TRANS_IS_WRITE_OFFSET;
          bool get_next = mem_system_->WillAcceptTransaction(addr, is_write);
          if (get_next) {
-            // fprintf(stderr, "[DRAMSIM #%d] @0x%016lx send Req %ld [%ld]cycle \n", ch_id, it->second.addr,  it->first, clk_);
+            // fprintf(stderr, "[DRAMSIM #%d] @0x%016lx send Req %ld [%ld]cycle \n", ch_id, it->second,  it->first, clk_);
             mem_system_->AddTransaction(addr, is_write);
             MYTRACE("0x%lX\t%s\t%lu", addr, is_write ? "WRITE":"READ", clk_);
             in_flight_reqs_.insert(std::make_pair(it->second, clk_));
@@ -159,6 +159,7 @@ SubsecondTime DRAMsimCntlr::addTrans(SubsecondTime t_sniper, IntPtr addr, bool i
 
    // add request to pending_reqs_ Map
    DramTrans trans = addr + (is_write ? TRANS_IS_WRITE_MASK : 0);
+   // fprintf(stderr, "[DRAMSIM #%d] @0x%016lx Add Req %ld cycle t %ld \n", ch_id, trans, req_clk, t_sniper.getNS());
    pending_reqs_.insert(std::pair<uint64_t, DramTrans>(req_clk, trans));
 
    // runDRAMsim(clk_latest_req_ > epoch_size ? clk_latest_req_ - epoch_size : 0);

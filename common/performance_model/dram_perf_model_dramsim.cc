@@ -68,6 +68,8 @@ DramPerfModelDramSim::DramPerfModelDramSim(core_id_t core_id,
       m_dramsim_buffering_delay = m_dramsim[0]->getDramQueueSize() * m_burst_processing_time * (m_cache_block_size / m_dram_burst_size);
    }
 
+   m_dram_request_size = m_dramsim[0]->getDramBlockSize();  // bytes
+
    if (dram_type == DramType::SYSTEM_DRAM) {
       registerStatsMetric("dram", core_id, "total-access-latency", &m_total_access_latency);
       registerStatsMetric("dram", core_id, "total-backpressure-latency", &m_total_bp_latency);
@@ -128,10 +130,14 @@ DramPerfModelDramSim::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size, 
       // ignore backward pressure if dram buffer is able to handle. 
    }
 
-   SubsecondTime dramsim_latency;
+   SubsecondTime dramsim_latency = SubsecondTime::Zero();
    uint32_t dramsim_ch_id = (address / m_cache_block_size) % m_dramsim_channels;
    IntPtr ch_addr = (address/m_cache_block_size) / m_dramsim_channels * m_cache_block_size;
-   dramsim_latency = m_dramsim[dramsim_ch_id]->addTrans(pkt_time + bp_delay, ch_addr, access_type == DramCntlrInterface::WRITE);
+   int num_of_dram_req = pkt_size / m_dram_request_size;
+   for (int i = 0; i < num_of_dram_req; i++){
+      SubsecondTime burst_latency = m_dramsim[dramsim_ch_id]->addTrans(pkt_time + bp_delay, ch_addr + i*m_dram_request_size, access_type == DramCntlrInterface::WRITE);
+      dramsim_latency = burst_latency > dramsim_latency ? burst_latency : dramsim_latency;
+   }
 
    SubsecondTime access_latency = dramsim_latency + bp_delay;
 
