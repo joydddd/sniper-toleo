@@ -4,6 +4,7 @@
 #include "nuca_cache.h"
 #include "dram_cache.h"
 #include "dram_mee_cntlr.h"
+#include "dram_invisimem_cntlr.h"
 #include "cxl_vnserver_cntlr.h"
 #include "cxl_invisimem_cntlr.h"
 #include "mee_naive.h"
@@ -42,8 +43,10 @@ MemoryManager::MemoryManager(Core* core,
    m_nuca_cache(NULL),
    m_dram_cache(NULL),
    m_dram_mee_cntlr(NULL),
+   m_dram_invisimem_cntlr(NULL),
    m_dram_directory_cntlr(NULL),
    m_dram_cntlr(NULL),
+   m_dram_cntlr_interface(NULL),
    m_cxl_cntlr(NULL),
    m_cxl_vnserver_cntlr(NULL),
    m_itlb(NULL), m_dtlb(NULL), m_stlb(NULL),
@@ -309,19 +312,28 @@ MemoryManager::MemoryManager(Core* core,
 
       LOG_ASSERT_ERROR(system_page_translation_enable || !m_address_translator,
                   "Address translator should be NULL when not enabled");
-      m_dram_cntlr = new PrL1PrL2DramDirectoryMSI::DramCntlr(
+      if (Sim()->getCfg()->getBool("perf_model/mee/enable") && Sim()->getCfg()->getString("perf_model/mee/type") == "invisimem") {
+         m_dram_invisimem_cntlr = new DramInvisiMemCntlr(this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator);
+         Sim()->getStatsManager()->logTopology("invisidram-cntlr", core->getId(), core->getId());
+         m_dram_cntlr_interface = m_dram_invisimem_cntlr;
+      } else {
+         m_dram_cntlr = new PrL1PrL2DramDirectoryMSI::DramCntlr(
           this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator);
-      Sim()->getStatsManager()->logTopology("dram-cntlr", core->getId(), core->getId());
-      DramCntlrInterface* dram_cntlr_interface = m_dram_cntlr;
+         Sim()->getStatsManager()->logTopology("dram-cntlr", core->getId(), core->getId());
+         m_dram_cntlr_interface = m_dram_cntlr;
+      }
+      
+   
       if (Sim()->getCfg()->getBool("perf_model/mee/enable") && Sim()->getCfg()->getString("perf_model/mee/type") == "toleo"){
          m_dram_mee_cntlr = new DramMEECntlr(this, getShmemPerfModel(), getCacheBlockSize(), m_address_translator, m_dram_cntlr, core->getId());
-         dram_cntlr_interface = m_dram_mee_cntlr;
+         m_dram_cntlr_interface = m_dram_mee_cntlr;
          Sim()->getStatsManager()->logTopology("mee-cntlr", core->getId(), core->getId());
       }
       if (Sim()->getCfg()->getBoolArray("perf_model/dram/cache/enabled", core->getId()))
       {
-         m_dram_cache = new DramCache(this, getShmemPerfModel(), m_dram_controller_home_lookup, getCacheBlockSize(), dram_cntlr_interface, m_address_translator);
+         m_dram_cache = new DramCache(this, getShmemPerfModel(), m_dram_controller_home_lookup, getCacheBlockSize(), m_dram_cntlr_interface, m_address_translator);
          Sim()->getStatsManager()->logTopology("dram-cache", core->getId(), core->getId());
+         m_dram_cntlr_interface = m_dram_cache;
       }
    }
 
@@ -446,12 +458,9 @@ MemoryManager::MemoryManager(Core* core,
       if (dram_direct_access && getCore()->getId() < (core_id_t)Sim()->getConfig()->getApplicationCores())
       {
          LOG_ASSERT_ERROR(Sim()->getConfig()->getApplicationCores() <= cache_parameters[m_last_level_cache].shared_cores, "DRAM direct access is only possible when there is just a single last-level cache (LLC level %d shared by %d, num cores %d)", m_last_level_cache, cache_parameters[m_last_level_cache].shared_cores, Sim()->getConfig()->getApplicationCores());
-         LOG_ASSERT_ERROR(m_dram_cntlr != NULL, "I'm supposed to have direct access to a DRAM controller, but there isn't one at this node");
+         LOG_ASSERT_ERROR(m_dram_cntlr_interface != NULL, "I'm supposed to have direct access to a DRAM controller, but there isn't one at this node");
          m_cache_cntlrs[(UInt32)m_last_level_cache]->setDRAMDirectAccess(
-            m_dram_cache ?       (DramCntlrInterface*)m_dram_cache : 
-            m_dram_mee_cntlr ?   (DramCntlrInterface*) m_dram_mee_cntlr : 
-                                 (DramCntlrInterface*)m_dram_cntlr,
-            Sim()->getCfg()->getInt("perf_model/llc/evict_buffers"));
+           m_dram_cntlr_interface, Sim()->getCfg()->getInt("perf_model/llc/evict_buffers"));
       }
    }
 
@@ -502,6 +511,8 @@ MemoryManager::~MemoryManager()
       delete m_dram_cache;
    if (m_dram_mee_cntlr)
       delete m_dram_mee_cntlr;
+   if (m_dram_invisimem_cntlr)
+      delete m_dram_invisimem_cntlr;
    if (m_dram_cntlr)
       delete m_dram_cntlr;
    if (m_cxl_cntlr)
@@ -603,18 +614,14 @@ MYLOG("begin");
          {
             case MemComponent::TAG_DIR:
             {
-               DramCntlrInterface* dram_interface = m_dram_cache ? (DramCntlrInterface*)m_dram_cache :
-                                                    m_dram_mee_cntlr ? (DramCntlrInterface*) m_dram_mee_cntlr : (DramCntlrInterface*)m_dram_cntlr;
-               dram_interface->handleMsgFromTagDirectory(sender, shmem_msg);
+               m_dram_cntlr_interface->handleMsgFromTagDirectory(sender, shmem_msg);
                break;
             }
 
             case MemComponent::CXL:
             {
-               DramCntlrInterface* dram_interface = m_dram_cache ? (DramCntlrInterface*)m_dram_cache :
-                                                    m_dram_mee_cntlr ? (DramCntlrInterface*) m_dram_mee_cntlr : (DramCntlrInterface*)m_dram_cntlr;
                core_id_t tag_dir = m_tag_directory_home_lookup->getHome(shmem_msg->getAddress());
-               dram_interface->handleMsgFromCXLCntlr(tag_dir, shmem_msg);
+               m_dram_cntlr_interface->handleMsgFromCXLCntlr(tag_dir, shmem_msg);
                break;
             }
 
@@ -774,11 +781,14 @@ MemoryManager::enableModels()
       m_cache_perf_models[(MemComponent::component_t)i]->enable();
    }
 
-   if (m_dram_cntlr_present)
+   if (m_dram_cntlr)
       m_dram_cntlr->getDramPerfModel()->enable();
    
    if (m_dram_mee_cntlr)
       m_dram_mee_cntlr->enablePerfModel();
+   
+   if (m_dram_invisimem_cntlr)
+      m_dram_invisimem_cntlr->enablePerfModel();
    
    if (m_cxl_cntlr_present){
       CXLCntlrInterface* cxl_interface = m_cxl_vnserver_cntlr ? (CXLCntlrInterface*)m_cxl_vnserver_cntlr : (CXLCntlrInterface*)m_cxl_cntlr;
@@ -798,11 +808,14 @@ MemoryManager::disableModels()
       m_cache_perf_models[(MemComponent::component_t)i]->disable();
    }
 
-   if (m_dram_cntlr_present)
+   if (m_dram_cntlr)
       m_dram_cntlr->getDramPerfModel()->disable();
    
    if (m_dram_mee_cntlr)
       m_dram_mee_cntlr->disablePerfModel();
+   
+   if (m_dram_invisimem_cntlr)
+      m_dram_invisimem_cntlr->disablePerfModel();
 
    if (m_cxl_cntlr_present){
       CXLCntlrInterface* cxl_interface = m_cxl_vnserver_cntlr ? (CXLCntlrInterface*)m_cxl_vnserver_cntlr : (CXLCntlrInterface*)m_cxl_cntlr;

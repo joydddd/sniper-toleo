@@ -72,7 +72,6 @@ SubsecondTime CXLPerfModelNaive::getAccessLatency(SubsecondTime pkt_time, UInt64
 
     if ((!m_enabled) || (requester >= (core_id_t) Config::getSingleton()->getApplicationCores()))
         return SubsecondTime::Zero();
-    
     SubsecondTime processing_time = m_cxl_bandwidth.getRoundedLatency(pkt_size);
 
     // Compute Queue Delay

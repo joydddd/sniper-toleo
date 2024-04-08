@@ -144,6 +144,7 @@ DramPerfModelDramSim::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size, 
 
       SubsecondTime burst_latency = m_dramsim[dramsim_ch_id]->addTrans(pkt_time + bp_delay, ch_addr, access_type == DramCntlrInterface::WRITE);
       dramsim_latency = burst_latency > dramsim_latency ? burst_latency : dramsim_latency;
+      m_total_bytes_accessed += m_dram_request_size;
    }
 
    SubsecondTime access_latency = dramsim_latency + bp_delay;
@@ -166,7 +167,6 @@ DramPerfModelDramSim::getAccessLatency(SubsecondTime pkt_time, UInt64 pkt_size, 
 
    // Update Memory Counters only for reads
    m_num_accesses ++;
-   m_total_bytes_accessed += pkt_size;
    m_total_access_latency += access_latency;
    m_total_bp_latency += bp_delay;
    if (access_type == DramCntlrInterface::READ)
@@ -186,7 +186,7 @@ void DramPerfModelDramSim::dramsimAdvance(SubsecondTime barrier_time){
    if ((m_bp_factor > 3 ) && new_bp_factor != 1.0) {
        fprintf(
            stderr,
-           "bp factor adjust %f final m_bp_fact %f, avg lat. %f ns\n",
+           "bp factor adjust %f final m_bp_fact %f, avg lat. %lu ns\n",
            new_bp_factor, m_bp_factor,(m_total_access_latency/m_num_accesses).getNS());
    }
 }

@@ -19,7 +19,7 @@ class ShmemPerf;
 // It sort of increases the queueing delay to a huge value if
 // the arrival times of adjacent packets are spread over a large
 // simulated time period
-enum DramType { SYSTEM_DRAM = 0, CXL_VN,  CXL_MEMORY, NUM_OF_DRAM_TYPES };
+enum DramType { SYSTEM_DRAM = 0, CXL_VN,  CXL_MEMORY, DDR_ONLY, NUM_OF_DRAM_TYPES };
 class DramPerfModel {
    protected:
       bool m_enabled;

@@ -300,7 +300,7 @@ void DRAMsimCntlr::printPendingReqs(){
 }
 
 void DRAMsimCntlr::printBackPresure(){
-    fprintf(stderr, "[DRAMSIM #%d] Occupancy %f, Pending %f, Idle %d\n", ch_id,
+    fprintf(stderr, "[DRAMSIM #%d] Occupancy %f, Pending %f, Idle %ld\n", ch_id,
             (float)total_busy_cycles / clk_,
             ((float)clk_ - total_idle_cycles - total_busy_cycles) / clk_,
             total_idle_cycles / clk_);

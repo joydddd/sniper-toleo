@@ -4,7 +4,7 @@
 #include "stats.h"
 #include "shmem_perf.h"
 
-#if 1
+#if 0
 #  define MYLOG_ENABLED
    extern Lock iolock;
 #  include "core_manager.h"
@@ -27,7 +27,7 @@ CXLInvisiMemCntlr::CXLInvisiMemCntlr(MemoryManagerBase* memory_manager, ShmemPer
     m_read_res_size(Sim()->getCfg()->getInt("perf_model/mee/r_res_pkt_size")),
     m_write_req_size(Sim()->getCfg()->getInt("perf_model/mee/w_req_pkt_size")),
     m_write_res_size(Sim()->getCfg()->getInt("perf_model/mee/w_res_pkt_size")),
-    m_metadata_per_cl(cache_block_size / Sim()->getCfg()->getInt("perf_model/mee/mac_per_cl")), 
+    m_metadata_per_cl(cache_block_size / Sim()->getCfg()->getInt("perf_model/mee/mac_per_cl")),  // in bytes
     m_cxl_pkt_size(Sim()->getCfg()->getInt("perf_model/cxl/pkt_size")),
     m_hmc_block_size(Sim()->getCfg()->getInt("perf_model/cxl/memory_expander_0/dram/block_size")),
     m_cxl_connected(cxl_connected),
