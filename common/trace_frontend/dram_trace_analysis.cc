@@ -78,7 +78,7 @@ DramTraceAnalyzer::DramTraceAnalyzer()
 
     f_log = fopen("dram_trace_analysis.out", "w");
     f_csv = fopen("dram_trace_analysis.csv", "w");
-    fprintf(f_csv, "icount\tpage-touched\tpage-readonly\tpage-one-write\tpage-flat\tpage-uneven\tpage-full\n");
+    fprintf(f_csv, "icount\tpage-touched\tpage-readonly\tpage-one-write\tpage-flat\tpage-uneven\tpage-full\twrite\treads\n");
 }
 
 void DramTraceAnalyzer::RecordDramAccess(core_id_t core_id, IntPtr address, DramCntlrInterface::access_t access_type){
@@ -190,7 +190,7 @@ void DramTraceAnalyzer::periodic(UInt64 icount){
         }
     }
 
-    fprintf(f_csv, "%lu\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\n",  icount, m_page_touched, page_read_only, page_1write, page_flat, page_uneven, page_full);
+    fprintf(f_csv, "%lu\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\t%lu\n",  icount, m_page_touched, page_read_only, page_1write, page_flat, page_uneven, page_full, m_writes, m_reads);
     fflush(f_csv);
      m_ins_count_next = icount +  32 * M10; // every 10m ins per core
 
