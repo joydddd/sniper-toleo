@@ -17,7 +17,7 @@
 
 #include <vector>
 
-
+class MEEPerfModel;
 
 class DramInvisiMemCntlr : public DramCntlrInterface
 {
@@ -28,6 +28,7 @@ class DramInvisiMemCntlr : public DramCntlrInterface
 
      DramPerfModel* m_ddr_perf_model;
      DramPerfModel* m_hmc_perf_model;
+     MEEPerfModel* m_mee_perf_model;
 
      typedef std::unordered_map<IntPtr, UInt64> AccessCountMap;
      UInt64 m_reads, m_writes;  // data reads and writes

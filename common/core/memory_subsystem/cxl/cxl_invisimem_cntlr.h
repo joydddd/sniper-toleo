@@ -14,6 +14,8 @@
 #include <vector>
 
 
+class MEEPerfModel;
+
 class CXLInvisiMemCntlr : public CXLCntlrInterface 
 {
     private:
@@ -21,12 +23,15 @@ class CXLInvisiMemCntlr : public CXLCntlrInterface
      UInt64 m_write_req_size, m_write_res_size;  // in bytes
      UInt64 m_metadata_per_cl; // in bytes
      UInt64 m_cxl_pkt_size, m_hmc_block_size; // in bytes
+     SubsecondTime m_aes_latency; 
 
      std::vector<bool> m_cxl_connected; 
      UInt64* m_reads, *m_writes;
      SubsecondTime* m_total_read_latency;
+     SubsecondTime* m_total_decrypt_latency;
      CXLPerfModel** m_cxl_perf_models;
      DramPerfModel** m_dram_perf_models;
+     MEEPerfModel** m_mee_perf_models;
 
      FILE* f_trace;
      bool enable_trace;

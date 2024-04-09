@@ -1,4 +1,5 @@
 #include "dram_invisimem_cntlr.h"
+#include "mee_perf_model.h"
 #include "memory_manager.h"
 #include "core.h"
 #include "log.h"
@@ -68,6 +69,7 @@ DramInvisiMemCntlr::DramInvisiMemCntlr(MemoryManagerBase* memory_manager,
             DramType::DDR_ONLY);
     m_hmc_perf_model = DramPerfModel::createDramPerfModel(
             memory_manager->getCore()->getId(), m_hmc_block_size);
+    m_mee_perf_model = new MEEPerfModel(memory_manager->getCore()->getId());
     
     // stats
     registerStatsMetric("dram", memory_manager->getCore()->getId(), "data-reads", &m_reads);
@@ -108,8 +110,11 @@ DramInvisiMemCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* d
     SubsecondTime ddr_access_latency = runDDRPerfModel(requester, now, address, READ, perf, is_virtual_addr);
     SubsecondTime hmc_access_latency = runHMCPerfModel(requester, now + ddr_access_latency, address, READ, perf, is_virtual_addr);
     SubsecondTime dram_access_latency = ddr_access_latency + hmc_access_latency;
-    
+    SubsecondTime aes_latency = m_mee_perf_model->getAESLatency(now + dram_access_latency, requester, MEEBase::DECRYPT, perf);
+    dram_access_latency += aes_latency;
+
     m_total_data_read_delay += dram_access_latency;
+    m_total_decrypt_delay += aes_latency;
     ++m_reads;
     MYLOG("[%d]R @ %016lx latency %s", requester, address, itostr(dram_access_latency.getNS()).c_str());
     TRACE(requester, address, DramCntlrInterface::READ);
@@ -120,16 +125,16 @@ DramInvisiMemCntlr::getDataFromDram(IntPtr address, core_id_t requester, Byte* d
 boost::tuple<SubsecondTime, HitWhere::where_t>
 DramInvisiMemCntlr::putDataToDram(IntPtr address, core_id_t requester, Byte* data_buf, SubsecondTime now, bool is_virtual_addr)
 {
-
-    SubsecondTime ddr_access_latency = runDDRPerfModel(requester, now, address, WRITE, &m_dummy_shmem_perf, is_virtual_addr);
-    SubsecondTime hmc_access_latency = runHMCPerfModel(requester, now + ddr_access_latency, address, WRITE, &m_dummy_shmem_perf, is_virtual_addr);
+    SubsecondTime aes_latency = m_mee_perf_model->getAESLatency(now, requester, MEEBase::ENCRYPT, &m_dummy_shmem_perf);
+    SubsecondTime ddr_access_latency = runDDRPerfModel(requester, now + aes_latency, address, WRITE, &m_dummy_shmem_perf, is_virtual_addr);
+    SubsecondTime hmc_access_latency = runHMCPerfModel(requester, now + ddr_access_latency + aes_latency, address, WRITE, &m_dummy_shmem_perf, is_virtual_addr);
     SubsecondTime dram_access_latency = ddr_access_latency + hmc_access_latency;
 
     ++m_writes;
     MYLOG("[%d]W @ %016lx", requester, address);
     TRACE(requester, address, DramCntlrInterface::WRITE);
 
-    return boost::tuple<SubsecondTime, HitWhere::where_t>(dram_access_latency, HitWhere::DRAM);
+    return boost::tuple<SubsecondTime, HitWhere::where_t>(dram_access_latency + aes_latency, HitWhere::DRAM);
 }
 
 SubsecondTime
@@ -183,10 +188,12 @@ DramInvisiMemCntlr::runDDRPerfModel(core_id_t requester, SubsecondTime time, Int
 void DramInvisiMemCntlr::enablePerfModel(){
     m_ddr_perf_model->enable();
     m_hmc_perf_model->enable();
+    m_mee_perf_model->enable();
 }
 
 void DramInvisiMemCntlr::disablePerfModel(){
     m_ddr_perf_model->disable();
     m_hmc_perf_model->disable();
+    m_mee_perf_model->disable();
 }
 

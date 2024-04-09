@@ -3,6 +3,7 @@
 #include "config.hpp"
 #include "stats.h"
 #include "shmem_perf.h"
+#include "mee_perf_model.h"
 
 #if 0
 #  define MYLOG_ENABLED
@@ -35,26 +36,35 @@ CXLInvisiMemCntlr::CXLInvisiMemCntlr(MemoryManagerBase* memory_manager, ShmemPer
     m_writes(NULL),
     f_trace(NULL),
     enable_trace(false)
-{
+{    
+     
+
      m_reads = (UInt64*) malloc(sizeof(UInt64)*cxl_connected.size());
      memset(m_reads, 0, sizeof(UInt64)*cxl_connected.size());
      m_writes = (UInt64*) malloc(sizeof(UInt64)*cxl_connected.size());
      memset(m_writes, 0, sizeof(UInt64)*cxl_connected.size());
-     m_total_read_latency = (SubsecondTime*) malloc(sizeof(UInt64)*cxl_connected.size());
+     m_total_read_latency = (SubsecondTime*) malloc(sizeof(SubsecondTime)*cxl_connected.size());
+     m_total_decrypt_latency = (SubsecondTime*) malloc(sizeof(SubsecondTime)*cxl_connected.size());
      m_cxl_perf_models = (CXLPerfModel**) malloc(sizeof(CXLPerfModel*)*cxl_connected.size());
      memset(m_cxl_perf_models, 0, sizeof(CXLPerfModel*) * cxl_connected.size());
      m_dram_perf_models = (DramPerfModel**) malloc(sizeof(DramPerfModel*)*cxl_connected.size());
      memset(m_dram_perf_models, 0, sizeof(DramPerfModel*) * cxl_connected.size());
+     m_mee_perf_models = (MEEPerfModel**) malloc(sizeof(MEEPerfModel*)*cxl_connected.size());
+     memset(m_mee_perf_models, 0, sizeof(MEEPerfModel*) * cxl_connected.size());
      for (cxl_id_t cxl_id = 0; cxl_id < cxl_connected.size(); ++cxl_id) {
          if (cxl_connected[cxl_id]) {
              /* Create CXL perf model */;
              m_cxl_perf_models[cxl_id] = CXLPerfModel::createCXLPerfModel(cxl_id, m_cxl_pkt_size * 8);  /* convert from bytes to bits */
              /* Create DRAM perf model on memory expanders */
              m_dram_perf_models[cxl_id] = DramPerfModel::createDramPerfModel(cxl_id, m_hmc_block_size, DramType::CXL_MEMORY); /* DramPerfModel takes bytes */
+             /* Create MEE perf model */
+             m_mee_perf_models[cxl_id] = new MEEPerfModel(cxl_id + 1);
             
              // stats
              m_total_read_latency[cxl_id] = SubsecondTime::Zero();
+             m_total_decrypt_latency[cxl_id] = SubsecondTime::Zero();
              registerStatsMetric("cxl", cxl_id, "total-read-latency", &m_total_read_latency[cxl_id]);
+             registerStatsMetric("cxl", cxl_id, "total-decrypt-latency", &m_total_decrypt_latency[cxl_id]);
              registerStatsMetric("cxl", cxl_id, "reads", &m_reads[cxl_id]);
              registerStatsMetric("cxl", cxl_id, "writes", &m_writes[cxl_id]);
          }
@@ -74,16 +84,19 @@ CXLInvisiMemCntlr::~CXLInvisiMemCntlr()
 {
    if (m_reads) free(m_reads);
    if (m_writes) free(m_writes);
-   if (m_total_read_latency) free(m_total_read_latency);
+   if (m_total_read_latency) free(m_total_read_latency);\
+   if (m_total_decrypt_latency) free(m_total_decrypt_latency);
 
    for (size_t i = 0; i < m_cxl_connected.size(); ++i) {
        if (m_cxl_perf_models[i]) {
            delete m_cxl_perf_models[i];
            delete m_dram_perf_models[i];
+           delete m_mee_perf_models[i];
        }
    }
    free(m_cxl_perf_models);
    free(m_dram_perf_models);
+   free(m_mee_perf_models);
 
 #ifdef MYLOG_ENABLED
    fclose(f_trace);
@@ -112,8 +125,15 @@ boost::tuple<SubsecondTime, HitWhere::where_t> CXLInvisiMemCntlr::getDataFromCXL
 
    SubsecondTime access_latency = cxl_latency + (dram_data_latency > dram_metadata_latency? dram_data_latency : dram_metadata_latency);
 
+   // AES decrypt
+   SubsecondTime aes_lat = m_mee_perf_models[cxl_id]->getAESLatency(now + access_latency, requester, MEEBase::MEE_op_t::DECRYPT, perf);
+   access_latency += aes_lat;
+
+   
+
    ++m_reads[cxl_id];
    m_total_read_latency[cxl_id] += access_latency;
+   m_total_decrypt_latency[cxl_id] += aes_lat;
    MYLOG(
        "[%d]R @ %016lx latency %s, cxl latency %s, dram_data %s, dram_metadata "
        "%s",
@@ -137,16 +157,20 @@ CXLInvisiMemCntlr::putDataToCXL(IntPtr address, core_id_t requester, Byte* data_
 
    UInt64 pkt_size = (m_write_req_size + m_write_res_size) * 8; /* Byte to bits */
    LOG_ASSERT_ERROR(m_cxl_connected[cxl_id], "CXL %d is not connected", cxl_id);
-   SubsecondTime cxl_latency = m_cxl_perf_models[cxl_id]->getAccessLatency(now, pkt_size, requester, local_address, WRITE, &m_dummy_shmem_perf);
 
+   SubsecondTime aes_latency = m_mee_perf_models[cxl_id]->getAESLatency(now, requester, MEEBase::MEE_op_t::ENCRYPT, &m_dummy_shmem_perf);
+
+   SubsecondTime cxl_latency = m_cxl_perf_models[cxl_id]->getAccessLatency(now + aes_latency, pkt_size, requester, local_address, WRITE, &m_dummy_shmem_perf);
 
    // Write data 
-   SubsecondTime dram_data_latency = m_dram_perf_models[cxl_id]->getAccessLatency(now + cxl_latency, getCacheBlockSize(), requester, local_address, DramCntlrInterface::access_t::WRITE, &m_dummy_shmem_perf);
+   SubsecondTime dram_data_latency = m_dram_perf_models[cxl_id]->getAccessLatency(now + cxl_latency + aes_latency, getCacheBlockSize(), requester, local_address, DramCntlrInterface::access_t::WRITE, &m_dummy_shmem_perf);
    // Write Meta data
-   SubsecondTime dram_metadata_latency = m_dram_perf_models[cxl_id]->getAccessLatency(now + cxl_latency, m_metadata_per_cl, requester, metadata_addr, DramCntlrInterface::access_t::WRITE, &m_dummy_shmem_perf);
+   SubsecondTime dram_metadata_latency = m_dram_perf_models[cxl_id]->getAccessLatency(now + cxl_latency + aes_latency, m_metadata_per_cl, requester, metadata_addr, DramCntlrInterface::access_t::WRITE, &m_dummy_shmem_perf);
    // fprintf(stderr, "[InvisiMem CXL Cntlr] data_addr: 0x%lx metadata_addr: 0x%lx\n", local_address, metadata_addr);
 
-   SubsecondTime access_latency = cxl_latency + (dram_data_latency > dram_metadata_latency? dram_data_latency : dram_metadata_latency);
+   SubsecondTime access_latency = cxl_latency + (dram_data_latency > dram_metadata_latency? dram_data_latency : dram_metadata_latency) + aes_latency;
+
+   // Update stats
    ++m_writes[cxl_id];
    MYLOG("[%d]W @ %016lx latency %s", cxl_id, address, itostr(access_latency.getNS()).c_str());
 
@@ -160,6 +184,7 @@ void CXLInvisiMemCntlr::enablePerfModel()
          assert(m_cxl_perf_models[cxl_id]);
          m_cxl_perf_models[cxl_id]->enable();
          m_dram_perf_models[cxl_id]->enable();
+         m_mee_perf_models[cxl_id]->enable();
       }
    }
    enable_trace = true;
@@ -172,6 +197,7 @@ void CXLInvisiMemCntlr::disablePerfModel()
          assert(m_cxl_perf_models[cxl_id]);
          m_cxl_perf_models[cxl_id]->disable();
          m_dram_perf_models[cxl_id]->disable();
+         m_mee_perf_models[cxl_id]->disable();
       }
    } 
    enable_trace = false;

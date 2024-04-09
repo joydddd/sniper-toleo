@@ -236,6 +236,9 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     if 'cxl.total-channel-latency' in results: # Use seperate performance model for cxl channel & dram (hmc)
       results['cxl.avgchlatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['cxl.total-channel-latency'], results['cxl.accesses']))
       template.append(('    average cxl channel latency (ns)', 'cxl.avgchlatency', format_ns(2)))
+    if 'cxl.total-decrypt-latency' in results:
+      results['cxl-breakdown.decrypt'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['cxl.total-decrypt-latency'], results['cxl.reads']))
+      template.append(('    Breakdown: cxl decrypt lat. (ns)', 'cxl-breakdown.decrypt', format_ns(2)))
     if 'cxl.total-read-queueing-delay' in results:
       results['cxl.avgqueueread'] = map(lambda (a,b): a/(b or 1), zip(results['cxl.total-read-queueing-delay'], results['cxl.reads']))
       results['cxl.avgqueuewrite'] = map(lambda (a,b): a/(b or 1), zip(results['cxl.total-write-queueing-delay'], results['cxl.writes']))
@@ -245,7 +248,7 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
       results['cxl.avgqueue'] = map(lambda (a,b): a/(b or 1), zip(results.get('cxl.total-queueing-delay', [0]*ncores), results['cxl.accesses']))
       template.append(('    average cxl queueing delay', 'cxl.avgqueue', format_ns(2)))
     if 'cxl-queue.total-time-used' in results:
-      results['cxl.bandwidth_util'] = map(lambda a: 100*a/time0 if time0 else float('inf'), results['cxl-queue.total-time-used'])
+      results['cxl.bandwidth_util'] = map(lambda a: float(100.0*a)/time0 if time0 else float('inf'), results['cxl-queue.total-time-used'])
       template.append(('    cxl queue utilization', 'cxl.bandwidth_util', lambda v: '%.2f%%' % v))
     
     
