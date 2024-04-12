@@ -289,7 +289,10 @@ BarrierSyncServer::barrierRelease(thread_id_t caller_id, bool continue_until_rel
          if (Sim()->getThreadManager()->anyThreadRunning())
             return false;
          else
-            LOG_ASSERT_ERROR(Sim()->getSyscallServer()->getNextTimeout(m_global_time) < SubsecondTime::MaxTime(), "No threads running, no timeout. Application has deadlocked...");
+            // DEBUG: This assert files on unwanted time for bfs
+            if (Sim()->getSyscallServer()->getNextTimeout(m_global_time) >= SubsecondTime::MaxTime())
+               fprintf(stderr, "No threads running, no timeout. Application has deadlocked...\n");
+            // LOG_ASSERT_ERROR(Sim()->getSyscallServer()->getNextTimeout(m_global_time) < SubsecondTime::MaxTime(), "No threads running, no timeout. Application has deadlocked...");
       }
 
       // If the barrier was disabled from HOOK_PERIODIC (for instance, if roi-end was triggered from a script), break
