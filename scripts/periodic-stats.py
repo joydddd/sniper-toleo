@@ -23,6 +23,7 @@ class PeriodicStats:
     self.in_roi = True
     self.next_interval = sim.stats.time() + self.interval
     sim.stats.write('periodic-0')
+    print('[STATS] periodic-stats: Writing out statistics every %d ns' % self.interval)
 
   def hook_roi_end(self):
     self.next_interval = float('inf')
@@ -34,10 +35,12 @@ class PeriodicStats:
       for t in range(self.interval, time, self.interval * 2):
         sim.util.db_delete('periodic-%d' % t)
       self.interval *= 2
+      print('[STATS] periodic-stats: Trim stats, Interval set to %d' %  self.interval)
 
     if time >= self.next_interval:
       self.num_snapshots += 1
       sim.stats.write('periodic-%d' % (self.num_snapshots * self.interval))
+      print('[STATS] periodic-stats: Writing stats: %d' % (self.num_snapshots * self.interval))
       self.next_interval += self.interval
 
 sim.util.register(PeriodicStats())
