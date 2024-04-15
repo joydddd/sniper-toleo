@@ -62,7 +62,7 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
   ]
 
   template = [
-    ('  Instructions', 'performance_model.instruction_count', str),
+    ('  Instructions %d' % sum(results['performance_model.instruction_count']), 'performance_model.instruction_count', str),
     ('  Cycles',       'performance_model.cycle_count_fixed', format_int),
     ('  IPC',          'performance_model.ipc', format_float(2)),
     ('  Time (ns)',    'performance_model.elapsed_time_fixed', format_ns(0)),
