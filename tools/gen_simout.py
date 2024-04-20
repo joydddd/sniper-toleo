@@ -114,7 +114,7 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
       ('    num cache accesses', '%s.accesses'%c, str),
       ('    num cache misses', '%s.misses'%c, str),
       ('    miss rate', '%s.missrate'%c, lambda v: '%.2f%%' % v),
-      ('    mpki', '%s.mpki'%c, lambda v: '%.2f' % v),
+      ('    mpki avg %.2f'  % (sum(results['%s.misses'%c])*1000.0/sum(results['performance_model.instruction_count'])), '%s.mpki'%c, lambda v: '%.2f' % v),
     ])
 
   allcaches = [ 'nuca-cache', 'dram-cache' ]
