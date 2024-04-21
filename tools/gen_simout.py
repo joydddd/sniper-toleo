@@ -67,7 +67,7 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
     ('  IPC',          'performance_model.ipc', format_float(2)),
     ('  Time (ns)',    'performance_model.elapsed_time_fixed', format_ns(0)),
     ('  Idle time (ns)', 'performance_model.idle_elapsed_time', format_ns(0)),
-    ('  Idle time (%)',  'performance_model.idle_elapsed_percent', format_pct),
+    ('  Idle time (%%) %d%%'%(sum(results['performance_model.idle_elapsed_percent'])*100/ncores),  'performance_model.idle_elapsed_percent', format_pct),
   ]
 
   if 'branch_predictor.num-incorrect' in results:
