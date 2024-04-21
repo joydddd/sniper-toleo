@@ -6,7 +6,7 @@
 #include "bbv_count.h"
 
 #define LINE_SIZE_BYTES 64
-#define MAX_NUM_THREADS 128
+#define MAX_NUM_THREADS 512
 #define MAX_NUM_SYSCALLS 4096
 
 // Type declarations
