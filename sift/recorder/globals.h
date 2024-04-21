@@ -19,7 +19,7 @@
 
 #define LINE_SIZE_BYTES 64
 #define MAX_NUM_SYSCALLS 4096
-#define MAX_NUM_THREADS_DEFAULT 128
+#define MAX_NUM_THREADS_DEFAULT 512
 
 extern KNOB<std::string> KnobOutputFile;
 extern KNOB<UINT64> KnobBlocksize;
