@@ -1,3 +1,40 @@
+# SniperSim Simulator for Toleo 
+This is a sniper sim based simulator for Toleo (ASPLOS'25) Please refer to our paper "Toleo: Scaling Freshness to Tera-scale Memory
+Using CXL and PIM" for details. 
+
+## File Structure
+| run_toleo_sim.py (download [here]) 
+
+## Getting Started
+Please follow the naive install instructions on Sniper Sim [Getting Started Page](https://snipersim.org/w/Getting_Started) to install this simulator. 
+
+### Prerequisites
+- A recent PIN installation.
+
+### Install Toleo Simulator
+
+1. Install dependent packages.
+```
+sudo dpkg --add-architecture i386
+sudo apt-get install binutils build-essential curl git libboost-dev libbz2-dev libc6:i386 libncurses5:i386 libsqlite3-dev libstdc++6:i386 python wget zlib1g-dev
+```
+
+2. build simulator
+```
+make USE_PIN=1 -j N #where N is the number of cores in your machine to use parallel make
+```
+3. Test run
+```
+cd test/fft
+make run
+```
+
+
+
+
+(original README from sinpersim) 
+-------------------------------------------------------------------------
+
 This is the source code for the Sniper multicore simulator developed
 by the Performance Lab research group at Ghent University, Belgium.
 Please refer to the NOTICE file in the top level directory for
