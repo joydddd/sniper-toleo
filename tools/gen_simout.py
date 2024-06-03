@@ -62,7 +62,7 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
   ]
 
   template = [
-    ('  Instructions %d' % sum(results['performance_model.instruction_count']), 'performance_model.instruction_count', str),
+    ('  Instructions: %d'%sum(results['performance_model.instruction_count']), 'performance_model.instruction_count', str),
     ('  Cycles',       'performance_model.cycle_count_fixed', format_int),
     ('  IPC',          'performance_model.ipc', format_float(2)),
     ('  Time (ns)',    'performance_model.elapsed_time_fixed', format_ns(0)),
@@ -169,7 +169,8 @@ def generate_simout(jobid = None, resultsdir = None, partial = None, output = sy
   results['dram.avglatency'] = map(lambda (a,b): a/b if b else float('inf'), zip(results['dram.total-access-latency'], results['dram.accesses']))
   template += [
     ('DRAM summary', '', ''),
-    ('  num dram accesses', 'dram.accesses', str),
+    ('  num dram reads', 'dram.reads', str),
+    ('  num dram write', 'dram.writes', str),
     ('  average dram access latency (ns)', 'dram.avglatency', format_ns(2)),
   ]
   if 'dram.total-read-latency' in results:
