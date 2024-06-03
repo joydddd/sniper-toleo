@@ -3,15 +3,43 @@ This is a sniper sim based simulator for Toleo (ASPLOS'25) Please refer to our p
 Using CXL and PIM" for details. 
 
 ## File Structure
-| run_toleo_sim.py (download [here]) 
+```
+├── run_toleo_sim.py
+├── sniper-toleo
+│   ├── DRAMsim3
+│   ├── run-sniper
+│   └── README.md (this file)
+├── genomicsbench
+│   └── benchmarks
+│      ├── fmi
+│      │  └── sim-<date-time>/<region>/sim.out
+│      ├── bsw-s
+│      ...
+├── gabps
+│   └── run
+│      ├── pr-kron-s
+│      │  └── sim-<date-time>/<region>/sim.out
+│      ├── sssp
+│      ....
+├── redis
+├── memtier_benchmark
+├── memcached
+├── hyrise
+└── llama2.c
+```
+# Getting Started
+Running evaluation for Toleo requires: 
+1. clone and setup SniperSim w Toleo modification. (this repo) 
+2. clone and setup DRAMSim3 from this [fork](https://github.com/joydddd/DRAMsim3). 
+3. clone and setup benchmarks with PIN hooks. Forkes with PIN hooks can be found in this [list](https://github.com/stars/joydddd/lists/toleo) 
 
-## Getting Started
+## Install SniperSim for Toleo
 Please follow the naive install instructions on Sniper Sim [Getting Started Page](https://snipersim.org/w/Getting_Started) to install this simulator. 
 
 ### Prerequisites
 - A recent PIN installation.
 
-### Install Toleo Simulator
+### Installation
 
 1. Install dependent packages.
 ```
