@@ -52,7 +52,7 @@ class DRAMsimCntlr {
     SubsecondTime t_start_;
     SubsecondTime t_latest_req_;
     uint64_t clk_latest_req_;
-    std::map<uint64_t, DramTrans> pending_reqs_;
+    std::multimap<uint64_t, DramTrans> pending_reqs_;
     std::unordered_multimap<DramTrans, uint64_t> in_flight_reqs_;
     uint64_t epoch_acc_late_launch, epoch_total_launched;
 
@@ -90,8 +90,10 @@ class DRAMsimCntlr {
       float advance(SubsecondTime t_barrier); // return updated bandwidth overflow factor
       SubsecondTime addTrans(SubsecondTime t_sniper, IntPtr addr, bool is_write);
       ComponentPeriod getDramPeriod(){return dram_period;}
+      UInt32 getLinkNumber(){return mem_system_->GetLinksNum();}
       UInt32 getBurstSize(){return mem_system_->GetBurstLength();} // in bytes
       UInt32 getDramQueueSize(){return mem_system_->GetQueueSize();} // dramqueue size in number of transactions
+      UInt32 getDramBlockSize(){ return mem_system_->GetBlockSize(); } // dram request size in bytes
 };
 
 #endif // __DRAMSIM_MODEL_H__

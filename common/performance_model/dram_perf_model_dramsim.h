@@ -20,6 +20,9 @@ class DramPerfModelDramSim : public DramPerfModel {
       SubsecondTime m_total_bp_latency;
       SubsecondTime m_total_read_latency;
 
+      UInt64 m_total_bytes_accessed; 
+      UInt64 m_reads, m_writes; 
+
       // DRAMsim3
       DRAMsimCntlr** m_dramsim;
       QueueModel* m_backpressure_queue;
@@ -28,6 +31,7 @@ class DramPerfModelDramSim : public DramPerfModel {
       SubsecondTime m_burst_processing_time;
       float m_bp_factor;
       UInt32 m_dram_burst_size;
+      UInt32 m_dram_request_size;  // bytes
 
       ShmemPerfModel* m_shmem_perf_model;
       ShmemPerfModel* getShmemPerfModel() { return m_shmem_perf_model; }

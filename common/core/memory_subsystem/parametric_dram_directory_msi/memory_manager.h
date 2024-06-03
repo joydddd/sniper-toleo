@@ -19,6 +19,7 @@
 
 class DramCache;
 class DramMEECntlr;
+class DramInvisiMemCntlr;
 class ShmemPerf;
 class CXLVNServerCntlr;
 
@@ -36,8 +37,10 @@ namespace ParametricDramDirectoryMSI
          NucaCache* m_nuca_cache;
          DramCache* m_dram_cache;
          DramMEECntlr* m_dram_mee_cntlr;
+         DramInvisiMemCntlr* m_dram_invisimem_cntlr;
          PrL1PrL2DramDirectoryMSI::DramDirectoryCntlr* m_dram_directory_cntlr;
          PrL1PrL2DramDirectoryMSI::DramCntlr* m_dram_cntlr;
+         DramCntlrInterface* m_dram_cntlr_interface;
          CXLCntlr* m_cxl_cntlr;
          CXLVNServerCntlr* m_cxl_vnserver_cntlr;
          static CXLAddressTranslator* m_address_translator; // Global Address Translator

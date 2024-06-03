@@ -5,6 +5,7 @@
 #include "queue_model_history_list.h"
 #include "queue_model_contention.h"
 #include "queue_model_windowed_mg1.h"
+#include "queue_model_windowed_mg2.h"
 #include "log.h"
 #include "config.hpp"
 
@@ -29,6 +30,10 @@ QueueModel::create(String name, UInt32 id, String model_type, SubsecondTime min_
    else if (model_type == "windowed_mg1")
    {
       return new QueueModelWindowedMG1(name, id);
+   }
+   else if (model_type == "windowed_mg2")
+   {
+      return new QueueModelWindowedMG2(name, id, min_processing_time);
    }
    else
    {

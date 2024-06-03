@@ -4,21 +4,26 @@
 #include "dram_perf_model_readwrite.h"
 #include "dram_perf_model_normal.h"
 #include "dram_perf_model_dramsim.h"
+#include "dram_perf_model_ddr.h"
 #include "config.hpp"
 
 DramPerfModel* DramPerfModel::createDramPerfModel(core_id_t core_id, UInt32 cache_block_size, DramType dram_type)
 {
    String config_name;
+   String type;
    if (dram_type == SYSTEM_DRAM){
       config_name = "perf_model/dram/type";
+      type = Sim()->getCfg()->getString(config_name);
    } else if (dram_type == CXL_MEMORY){
       config_name = "perf_model/cxl/memory_expander_" + itostr((unsigned int)core_id) + "/dram/type";
+      type = Sim()->getCfg()->getString(config_name);
    } else if (dram_type == CXL_VN){
       config_name = "perf_model/cxl/vnserver/dram/type";
+      type = Sim()->getCfg()->getString(config_name);
    } else {
-      LOG_PRINT_ERROR("Invalid DRAM perf model type %d", dram_type);
+       if (dram_type == DDR_ONLY) type = "ddr-only";
+       else LOG_PRINT_ERROR("Invalid DRAM perf model type %d", dram_type);
    }
-   String type = Sim()->getCfg()->getString(config_name);
 
    if (type == "constant")
    {
@@ -36,6 +41,9 @@ DramPerfModel* DramPerfModel::createDramPerfModel(core_id_t core_id, UInt32 cach
    } else if (type == "dramsim")
    {
       return new DramPerfModelDramSim(core_id, cache_block_size, dram_type);
+   } else if (type == "ddr-only")
+   {
+      return new DramPerfModelDDR(core_id, cache_block_size);
    }
    else
    {

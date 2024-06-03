@@ -98,7 +98,7 @@ MEENaive::accessMAC(IntPtr v_addr, Cache::access_t access, core_id_t requester, 
     if (!m_mac_cache_enabled) return boost::make_tuple<SubsecondTime, HitWhere::where_t>(SubsecondTime::Zero(), m_cxl_cntlr ? HitWhere::CXL : HitWhere::DRAM);
     
     
-    IntPtr mac_addr = m_address_translator->getMACAddrFromVirtual(v_addr);
+    IntPtr mac_addr = m_address_translator->getMACAddrFromVirtual_aligned(v_addr);
     CacheBlockInfo *block_info = m_mac_cache->peekSingleLine(mac_addr);
     SubsecondTime latency = m_mac_cache_tag_latency;
     Byte data_buf[getCacheBlockSize()];
