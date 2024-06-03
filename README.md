@@ -29,9 +29,9 @@ Using CXL and PIM" for details.
 ```
 # Getting Started
 Running evaluation for Toleo requires: 
-1. clone and setup SniperSim w Toleo modification. (this repo) 
-2. clone and setup DRAMSim3 from this [fork](https://github.com/joydddd/DRAMsim3). 
-3. clone and setup benchmarks with PIN hooks. Forkes with PIN hooks can be found in this [list](https://github.com/stars/joydddd/lists/toleo) 
+1. clone and setup DRAMSim3 from this [fork](https://github.com/joydddd/DRAMsim3). 
+2. clone and setup SniperSim w Toleo modification. (this repo) 
+3. clone and setup benchmarks with PIN hooks. Forks with PIN hooks can be found in this [list](https://github.com/stars/joydddd/lists/toleo) 
 
 ## Install SniperSim for Toleo
 Please follow the naive install instructions on Sniper Sim [Getting Started Page](https://snipersim.org/w/Getting_Started) to install this simulator. 
@@ -55,6 +55,34 @@ make USE_PIN=1 -j N #where N is the number of cores in your machine to use paral
 ```
 cd test/fft
 make run
+```
+
+## Setup Genomoicsbench and Gapbs Benchmark Set
+Here we provide detailed instructions for setting up genomicsbench and gapbs benchmarks. 
+
+
+Confirm sample benchmarks are set up correctly. 
+```
+toleo_sim.py native --bench bsw-s --arch zen4_cxl
+```
+
+## Running Sample Testcases 
+Use the `run_toleo_sim.py` script to start a simulation. 
+Simulate a node with memory protected by Toleo. 
+```
+./run_toleo_sim.py sniper --bench bsw-s --arch zen4_vn -a
+```
+Simulate without memory protection
+```
+./run_toleo_sim.py sniper --bench bsw-s --arch zen4_cxl -a
+```
+Simulate memory with confidentiality and integrity protection. (CI) 
+```
+toleo_sim.py sniper --bench bsw-s --arch zen4_no_freshness -a
+```
+Simulate invisiMem
+```
+toleo_sim.py sniper --bench bsw-s --arch zen4_cxl_invisimem -a
 ```
 
 
