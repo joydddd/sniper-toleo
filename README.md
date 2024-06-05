@@ -110,7 +110,7 @@ wget https://genomicsbench.eecs.umich.edu/input-datasets.tar.gz
 tar -zxf input-datasets.tar.gz
 sudo apt-get install $(cat debian.prerequisites)
 make -j12
-``
+```
 
 ## Run Toleo Simulation on Benchmarks
 Download simulation [script](https://raw.githubusercontent.com/joydddd/VNserver_spec/main/run_toleo_sim.py) `run_toleo_sim.py` 
@@ -142,18 +142,22 @@ Simulate Toleo
 ```
 ./run_toleo_sim.py sniper --bench bsw-s --arch zen4_vn -a
 ```
+
 Simulate no memory protection
 ```
 ./run_toleo_sim.py sniper --bench bsw-s --arch zen4_cxl -a
 ```
+
 Simulate memory with confidentiality and integrity protection and no freshness protection. (CI) 
 ```
 toleo_sim.py sniper --bench bsw-s --arch zen4_no_freshness -a
 ```
 
 > [!WARNING]
-> This requires using sniper-toleo from branch `vnserver`. 
-Simulate invisiMem
+> This requires using sniper-toleo from branch `vnserver`.
+
+
+Simulate invisiMem baseline
 ```
 toleo_sim.py sniper --bench bsw-s --arch zen4_cxl_invisimem -a
 ```
