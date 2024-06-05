@@ -121,10 +121,6 @@ chmod +x run_toleo_sim.py
 ./run_toleo_sim.py --help
 ```
 
-### Sample Benchmark Suite Setup: Gapbs
-
-TODO: Add setup ins for gapbs
-
 ### Native Run
 First, we want to ensure the benchmark runs natively with our script and reports a kernel runtime + peak RSS ussage. 
 
@@ -161,3 +157,13 @@ Simulate invisiMem baseline
 ```
 toleo_sim.py sniper --bench bsw-s --arch zen4_cxl_invisimem -a
 ```
+
+# Gapbs Benchmark
+
+# llama2.c
+
+# Database: Memcached 
+
+# Database: Redis
+
+# Database: Hyrise
