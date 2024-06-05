@@ -185,7 +185,7 @@ XED_DEP=$(XED_HOME)/include/xed/xed-iclass-enum.h
 xed: mbuild xed_install $(XED_DEP)
 $(XED_DEP): $(XED_INSTALL_DEP)
 	$(_MSG) '[INSTAL] xed'
-	$(_CMD) cd $(XED_INSTALL) ; python3 ./mfile.py --silent --extra-flags=-fPIC --shared --install-dir $(XED_HOME) install
+	$(_CMD) cd $(XED_INSTALL) ; python2 ./mfile.py --silent --extra-flags=-fPIC --shared --install-dir $(XED_HOME) install
 
 ifneq (,$(USE_PIN))
 PIN_DOWNLOAD=https://snipersim.org/packages/pin-3.22-98547-g7a303a835-gcc-linux.tar.gz
