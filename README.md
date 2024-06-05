@@ -158,6 +158,9 @@ Simulate invisiMem baseline
 toleo_sim.py sniper --bench bsw-s --arch zen4_cxl_invisimem -a
 ```
 
+### Simulation Results
+Simulation results can be found in each benchmark binary location, under a fold named `sim-<date:time>/<region>`. For example, `toleo_root/genomicsbench/bsw-s/sim-2024-06-05_04:51:28/r2-t32` is the result path for `bsw-s` simulation. In this output directory, you'll find `sim.out` which contains simulation results, including runtime, cpi, cache hit rate, memory latency breakdown etc. 
+
 # Gapbs Benchmark
 
 # llama2.c
