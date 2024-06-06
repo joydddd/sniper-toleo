@@ -175,8 +175,8 @@ You could do this with a single command
 ./run_toleo_sim.py sniper --bench bsw-s --arch zen4_vn zen4_cxl zen4_no_freshness -a
 ```
 
-> [!WARNING]
-> This requires using sniper-toleo from branch `vnserver`.
+> [!NOTE]
+> This requires using sniper-toleo from branch `invisimem`.
 Simulate invisiMem baseline
 ```
 toleo_sim.py sniper --bench bsw-s --arch zen4_cxl_invisimem -a
