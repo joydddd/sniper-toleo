@@ -170,14 +170,15 @@ Simulate memory with confidentiality and integrity protection and no freshness p
 ./run_toleo_sim.py sniper --bench bsw-s --arch zen4_no_freshness -a
 ```
 
-You could do this with a single command
+You can batch run many benchmarks on multiple architectural configurations. 
 ```
-./run_toleo_sim.py sniper --bench bsw-s --arch zen4_vn zen4_cxl zen4_no_freshness -a
+./run_toleo_sim.py sniper --bench bsw-s pr-kron-s --arch zen4_vn zen4_cxl zen4_no_freshness -a
 ```
 
 > [!NOTE]
 > This requires using sniper-toleo from branch `invisimem`.
-Simulate invisiMem baseline
+     
+Simulate invisiMem
 ```
 toleo_sim.py sniper --bench bsw-s --arch zen4_cxl_invisimem -a
 ```
