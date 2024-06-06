@@ -153,7 +153,7 @@ We can test the benchmark instrumentation via intel sde tool (pinplay).
 ```
 The program will print how many instructions are executed at warmup start, sim start, and sim end in the terminal. More control information can be found in folder `<path_to_benchmark>/region`. 
 ### Run simulation 
-Use the `run_toleo_sim.py` script to start a simulation. This may take a long time, so we suggest starting with the `sim_test` suite ('bsw-s` from genomicsbench, and `pr-kron-s` from gapbs. Both should simulate in less than 20 minutes).
+Use the `run_toleo_sim.py` script to start a simulation. This may take a long time, so we suggest starting with the `sim_test` suite (`bsw-s` from genomicsbench, and `pr-kron-s` from gapbs. Both should simulate in less than 20 minutes).
 
 Simulate Toleo
 ```
@@ -170,17 +170,20 @@ Simulate memory with confidentiality and integrity protection and no freshness p
 ./run_toleo_sim.py sniper --bench bsw-s --arch zen4_no_freshness -a
 ```
 
+You could do this with a single command
+```
+./run_toleo_sim.py sniper --bench bsw-s --arch zen4_vn zen4_cxl zen4_no_freshness -a
+```
+
 > [!WARNING]
 > This requires using sniper-toleo from branch `vnserver`.
-
-
 Simulate invisiMem baseline
 ```
 toleo_sim.py sniper --bench bsw-s --arch zen4_cxl_invisimem -a
 ```
 
 ### Simulation Results
-Simulation results can be found in each benchmark binary location, under a fold named `sim-<date:time>/<region>`. For example, `toleo_root/genomicsbench/bsw-s/sim-2024-06-05_04:51:28-zen4_vn/r2-t32` is the result path for `bsw-s` simulation. In this output directory, you'll find performance stats in `sim.out` and toleo stats in `dram_trace_analysis.csv`. 
+Simulation results can be found in each benchmark binary location, under a fold named `sim-<date:time>-<arch>/<region>`. For example, `toleo_root/genomicsbench/bsw-s/sim-2024-06-05_04:51:28-zen4_vn/r2-t32` is the result path for `bsw-s` simulation. In this output directory, you'll find performance stats in `sim.out` and toleo stats in `dram_trace_analysis.csv`. 
 
 `dram_trace_analysis.csv` contains information about how many pages the program accessed and in what format it is stored on Toleo. Toleo usage can thus be calcualted from this csv form. 
 ```
