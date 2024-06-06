@@ -167,7 +167,7 @@ Simulate no memory protection
 
 Simulate memory with confidentiality and integrity protection and no freshness protection. (CI) 
 ```
-toleo_sim.py sniper --bench bsw-s --arch zen4_no_freshness -a
+./run_toleo_sim.py sniper --bench bsw-s --arch zen4_no_freshness -a
 ```
 
 > [!WARNING]
