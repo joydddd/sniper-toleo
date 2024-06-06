@@ -44,7 +44,7 @@ make -j12
 ./run_toleo_sim.py native --bench genomicsbench
 ```
 Results can be found in `toleo_root/genomicsbench/benchmarks/<bench-name>/`
-## Gaps
+## Gapbs
 1. clone [Gapbs](https://github.com/joydddd/gapbs) and build kernels. 
 ```
 make -j 14 # build kernels
