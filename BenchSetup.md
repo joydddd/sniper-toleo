@@ -103,4 +103,41 @@ TODO
 
 ## hyrise
 
-TODO
+1. clone hyrise from this [fork](https://github.com/joydddd/hyrise)
+```
+git clone git@github.com:joydddd/hyrise.git
+cd hyrise
+git submodule update --init --recursive
+```
+2. build hyrise
+```
+mkdir build
+cd build
+cmake -DHYRISE_RELAXED_BUILD=On ..
+CPLUS_INCLUDE_PATH=<path_to_toleo_root>:$CPLUE_INCLUDE_PATH/sniper-toleo/include make -j <number of threads> # build with sniper-toleo/include in include path
+```
+3. build run directory
+```
+#in hyrise root
+mkdir -p run/hyrise
+```
+```
+hyrise
+  ├── build
+  ├── run
+  │    └── hyrise
+  │        └── tpcc_cache_tables/sf-10
+  └── build
+      └── hyriseBnechmarkTPCC
+          
+```
+4. Native run
+```
+# in toleo_root
+./run_toleo_sim.py native --bench hyrise
+```
+> [!WARNING]
+>  The first run of hyrise builds a cache for tpcc tables (`run/hyrise/tpcc_cache_tables/sf-10`). This may take a while (several minutes). Please make sure this cache is properly built before running sniper simulation for hyrise.  
+
+> [!NOTE]
+> Hyrise database takes a relatively long time to warmup (minutes in native mode, hours in simulation mode).
