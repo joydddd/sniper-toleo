@@ -125,7 +125,10 @@ make -j12
 ```
 
 ## Simulation Automation Script
-Download simulation [script](https://raw.githubusercontent.com/joydddd/VNserver_spec/main/run_toleo_sim.py) `run_toleo_sim.py` 
+To facilitate the artifact evaluation, we provide a batch run [script](https://raw.githubusercontent.com/joydddd/VNserver_spec/main/run_toleo_sim.py) that includes instrumentation details of our selected benchmark suite. Running all the simulations on one machine of >32 cores takes **~20 days**.  We highly recommend you start with our toy bench suite `sim_test` for quick evaluation. (Contains `bsw-s` from genomicsbench and `pr-kron-s` from gapbs, see [benchmark setup instruction](BenchSetup.md)) 
+
+
+Download batch run script  `run_toleo_sim.py` 
 ```
 # in toleo_root
 wget https://github.com/joydddd/VNserver_spec/raw/main/run_toleo_sim.py
@@ -145,15 +148,17 @@ First, we want to ensure the benchmark runs natively with our script and reports
 ```
 The program will print `PIN_START` and `PIN_END` in the terminal when encountering its PIN hooks and entering the region of interest (ROI). 
 
-### (optional) Test instrumentation (TODO) 
+### (optional) Test instrumentation
 We can test the benchmark instrumentation via intel sde tool (pinplay). 
+
+> TODO: Add instructions for installing Intel SDE tools. 
 
 ```
 ./run_toleo_sim.py region --bench bsw-s # run bsw-s benchmark
 ```
 The program will print how many instructions are executed at warmup start, sim start, and sim end in the terminal. More control information can be found in folder `<path_to_benchmark>/region`. 
 ### Run simulation 
-Use the `run_toleo_sim.py` script to start a simulation. This may take a long time, so we suggest starting with the `sim_test` suite (`bsw-s` from genomicsbench, and `pr-kron-s` from gapbs. Both should simulate in less than 20 minutes).
+Use the `run_toleo_sim.py` script to start a simulation. Simluation for each benchmark takes hours - days, therefore we suggest starting with the `sim_test` suite (`bsw-s` from genomicsbench, and `pr-kron-s` from gapbs. Both should simulate in less than 20 minutes).
 
 Simulate Toleo
 ```
@@ -176,7 +181,7 @@ You can batch run many benchmarks on multiple architectural configurations.
 ```
 
 > [!NOTE]
-> This requires using sniper-toleo from branch `invisimem`.
+> Use sniper-toleo from branch `invisimem` to run invisiMem baseline.
      
 Simulate invisiMem
 ```
