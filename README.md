@@ -161,12 +161,14 @@ The program will print how many instructions are executed at warmup start, sim s
 Use the `run_toleo_sim.py` script to start a simulation. Simluation for each benchmark takes hours - days, therefore we suggest starting with the `sim_test` suite (`bsw-s` from genomicsbench, and `pr-kron-s` from gapbs. Both should simulate in less than 20 minutes).
 
 **No protection. baseline of performance overheads** 
+
 Simulate no memory protection
 ```
 ./run_toleo_sim.py sniper --bench bsw-s --arch zen4_cxl -a
 ```
 
 **Toleo**
+
 Simulate Toleo
 ```
 ./run_toleo_sim.py sniper --bench bsw-s --arch zen4_vn -a
@@ -174,6 +176,7 @@ Simulate Toleo
 
 
 **CI**
+
 Simulate memory with confidentiality and integrity protection and no freshness protection. (CI) 
 ```
 ./run_toleo_sim.py sniper --bench bsw-s --arch zen4_no_freshness -a
