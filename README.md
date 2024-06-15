@@ -97,7 +97,11 @@ This command runs sniper-toleo simulation for three setups: Toleo, C+I, and no-p
 Now you've successfully setup sniper-toleo and is ready to simluate toleo for any benchmark of your choice! run the simulation with 
 ```
 ./run-sniper -n 32 -c <arch> -d <output-dir>  -- <run benchmakr cmd>
-# <arch> = zen4_cxl (no protection), zen4_vn (toleo), zen4_no_freshness (C+I), zen4_no_dramsim (light weighted config used for Toleo space overhead analysis) 
+# <arch> = zen4_cxl: baseline no protection, 
+#          zen4_vn:  toleo
+#          zen4_no_freshness: CI
+#          zen4_cxl_invisimem: InvisiMem (Please use invisimem branch of sniper-toleo for this architecture!) 
+#          zen4_no_dramsim: light weighted Toleo without DRAMSim3. Used for Toleo page type analysis. 
 ```
 More controls over the simulation are available via `./run-sniper --help`. 
 > [!NOTE]
@@ -140,13 +144,93 @@ Run `run_toleo_sim.py --help` to learn how to use the script.
 ## Simulation Workflow
 
 ### Native Run
-First, we want to ensure the benchmark runs natively with our script and reports a kernel runtime + peak RSS ussage. 
+Test benchmark setup and report basic information about the benchmark. 
 
 ```
 ./run_toleo_sim.py native --bench genomicsbench # this instruction runs all tests in genomics benchmark
 ./run_toleo_sim.py native --bench bsw-s # run bsw-s benchmark
 ```
-The program will print `PIN_START` and `PIN_END` in the terminal when encountering its PIN hooks and entering the region of interest (ROI). 
+The benchmark prints `PIN_START` and `PIN_END` in the terminal when it enters and leaves the region of interest (ROI). This indicates that PIN_HOOKs are properly inserted and our instrumentation tool can detect when the benchmark enters ROI. 
+
+It also reports basic information about the benchmark, e.g. CPU time, peak RSS size, Page Faults etc. 
+<details>
+<summary>Example output for bsw-s </summary>
+ 
+```
+toleo_root$ ./run_toleo_sim.py native --bench bsw-s
+******************* Running native bsw-s************************
+/usr/bin/time -v ./bsw -pairs ../../input-datasets/bsw/small/bandedSWA_SRR7733443_100k_input.txt  -t 32 -b 512 2>&1 | tee /home/joydong/toleo/genomicsbench/benchmarks/bsw-s/native-run/sniper.out
+PIN START
+PIN END
+Number of input pairs: 100000
+Allocating 0.221 GB memory for input buffers...
+4] workTicks = 51504554
+29] workTicks = 53017524
+23] workTicks = 56130408
+16] workTicks = 53817462
+30] workTicks = 52364988
+17] workTicks = 56771468
+12] workTicks = 52361226
+26] workTicks = 54032656
+18] workTicks = 55996382
+6] workTicks = 54965176
+8] workTicks = 53517756
+7] workTicks = 55016286
+21] workTicks = 57274246
+19] workTicks = 52326987
+5] workTicks = 51139868
+9] workTicks = 60749688
+24] workTicks = 50829902
+1] workTicks = 51238592
+3] workTicks = 54227330
+11] workTicks = 52844928
+27] workTicks = 51141502
+15] workTicks = 52152112
+31] workTicks = 55819150
+25] workTicks = 52839380
+13] workTicks = 54880854
+2] workTicks = 52383152
+20] workTicks = 54900462
+10] workTicks = 54577728
+22] workTicks = 54673222
+28] workTicks = 60828196
+14] workTicks = 51987192
+0] workTicks = 51599402
+Executed AVX2 vector code...
+Processor freq: 3801.83 MHz
+Read time = 0.07 s
+Overall SW cycles = 63471058, 0.02 s
+Total Pairs processed: 100000
+avgTicks = 53997180.593750, maxTicks = 60828196, load imbalance = 1.126507
+        Command being timed: "./bsw -pairs ../../input-datasets/bsw/small/bandedSWA_SRR7733443_100k_input.txt -t 32 -b 512"
+        User time (seconds): 0.59
+        System time (seconds): 0.12
+        Percent of CPU this job got: 64%
+        Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.12
+        Average shared text size (kbytes): 0
+        Average unshared data size (kbytes): 0
+        Average stack size (kbytes): 0
+        Average total size (kbytes): 0
+        Maximum resident set size (kbytes): 251032
+        Average resident set size (kbytes): 0
+        Major (requiring I/O) page faults: 0
+        Minor (reclaiming a frame) page faults: 64055
+        Voluntary context switches: 537
+        Involuntary context switches: 78
+        Swaps: 0
+        File system inputs: 32
+        File system outputs: 0
+        Socket messages sent: 0
+        Socket messages received: 0
+        Signals delivered: 0
+        Page size (bytes): 4096
+        Exit status: 0
+Arch: zen4_cxl
+```
+
+
+</details>
+
 
 ### (optional) Test instrumentation
 We can test the benchmark instrumentation via intel sde tool (pinplay). 
@@ -158,7 +242,9 @@ We can test the benchmark instrumentation via intel sde tool (pinplay).
 ```
 The program will print how many instructions are executed at warmup start, sim start, and sim end in the terminal. More control information can be found in folder `<path_to_benchmark>/region`. 
 ### Run simulation 
-Use the `run_toleo_sim.py` script to start a simulation. Simluation for each benchmark takes hours - days, therefore we suggest starting with the `sim_test` suite (`bsw-s` from genomicsbench, and `pr-kron-s` from gapbs. Both should simulate in less than 20 minutes).
+Run simulations on different architectural configs (no-protection, CI, toleo & invisimem) to generate performance metrics (runtime, cache hit rates, memory latency, and memory bandwidth utilization etc. ) and Trip format stats. 
+
+Use the `run_toleo_sim.py` script to start a simulation. Simluation for each benchmark takes hours - days, therefore we suggest starting with the `sim_test` suite (`bsw-s` from genomicsbench, and `pr-kron-s` from gapbs. Both should simulate in less than 30 minutes).
 
 **No protection. baseline of performance overheads** 
 
