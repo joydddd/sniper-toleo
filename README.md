@@ -70,6 +70,16 @@ cd sniper-toleo
 ln -s ../DRAMsim3 DRAMsim3
 ```
 
+### (optional) Setup docker environment
+```
+cd sniper-toleo/docker
+make   # build docker image
+make run # run docker as user
+# make run-root # runs docker as root.
+cd .. 
+```
+Now you're in the docker container. Continue to install sniper-toloe following the steps below. 
+
 ### Install SniperSim
 Please follow the naive install instructions on Sniper Sim [Getting Started Page](https://snipersim.org/w/Getting_Started) to install sniper-toleo. Necessary steps are provided below
 
