@@ -57,3 +57,6 @@ RUN apt-get update && apt-get install -y \
     g++-9 \
     vim \
  && rm -rf /var/lib/apt/lists/*
+# for running scripts 
+RUN apt-get update && apt-get install -y python3.8-dev time
+RUN ln -s /usr/bin/python3.8 /usr/bin/python3
