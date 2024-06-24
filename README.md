@@ -78,7 +78,7 @@ make run # run docker as user
 # make run-root # runs docker as root.
 cd .. 
 ```
-Now you're in the docker container. Continue to install sniper-toloe following the steps below. 
+Now you're in the docker container. Continue to build sniper-toloe following the steps below. You could skip the dependent package installation. 
 
 ### Install SniperSim
 Please follow the naive install instructions on Sniper Sim [Getting Started Page](https://snipersim.org/w/Getting_Started) to install sniper-toleo. Necessary steps are provided below
@@ -89,12 +89,14 @@ sudo dpkg --add-architecture i386
 sudo apt-get install binutils build-essential curl git libboost-dev libbz2-dev libc6:i386 libncurses5:i386 libsqlite3-dev libstdc++6:i386 python wget zlib1g-dev
 ```
 
+> [!NOTE]
+> Know issue: snipersim assum python2 as the default python version. Make sure your python command points to python2.7.
+
 2. build simulator with PIN
 ```
 make USE_PIN=1 -j N #where N is the number of cores in your machine to use parallel make
 ```
-> [!NOTE]
-> Know issue: snipersim assum python2 as the default python version. Make sure your python command points to python2.7.
+
 
 ### Test Run
 ```
