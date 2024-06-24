@@ -60,3 +60,4 @@ RUN apt-get update && apt-get install -y \
 # for running scripts 
 RUN apt-get update && apt-get install -y python3.8-dev time
 RUN ln -s /usr/bin/python3.8 /usr/bin/python3
+RUN apt-get install -y liblzma-dev liblzma5
