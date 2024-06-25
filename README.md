@@ -140,9 +140,17 @@ sudo apt-get install $(cat debian.prerequisites)
 make -j12
 ```
 
-## Simulation Automation Script
-To facilitate the artifact evaluation, we provide a batch run [script](https://raw.githubusercontent.com/joydddd/VNserver_spec/main/run_toleo_sim.py) that includes instrumentation details of our selected benchmark suite. Running all the simulations on one machine of >32 cores takes **~20 days**.  We highly recommend you start with our toy bench suite `sim_test` for quick evaluation. (Contains `bsw-s` from genomicsbench and `pr-kron-s` from gapbs, see [benchmark setup instruction](BenchSetup.md)) 
+# Evaluation Workflow
+In this section we provide instructions on how to use our batch run script to test the benchmark setups, test the instrumentation setups, and finally run simluations in batches. 
+Running all the simulations on one machine of >32 cores takes **~20 days**.  We highly recommend you start with our toy bench suite `sim_test` for quick evaluation. (`bsw-s` from genomicsbench and `pr-kron-s` from gapbs, see [benchmark setup instruction](BenchSetup.md)) 
 
+### Prerequisite
+- A working installation of sniper-toleo that run `test/fft` successfully.
+- Benchmarks that are cloned and built following [benchmark setup instruction]
+
+
+## Simulation Automation Script
+We provide a batch run [script](https://raw.githubusercontent.com/joydddd/VNserver_spec/main/run_toleo_sim.py) that includes instrumentation details of our selected benchmark suite. 
 
 Download batch run script  `run_toleo_sim.py` 
 ```
@@ -151,22 +159,25 @@ wget https://github.com/joydddd/VNserver_spec/raw/main/run_toleo_sim.py
 chmod +x run_toleo_sim.py
 ./run_toleo_sim.py --help
 ```
-Run `run_toleo_sim.py --help` to learn how to use the script. 
+Run `run_toleo_sim.py --help` to learn how to use the script. `./run_toleo_sim.py print-bench` to print all benchmarks supported by this script. 
 
 ## Simulation Workflow
 
 ### Native Run
-Test benchmark setup and report basic information about the benchmark. 
+First, we want to run the benchmarks natively to make sure they are setup properly. 
+
+
+Take genomicsbench as an exmaple:  
 
 ```
-./run_toleo_sim.py native --bench genomicsbench # this instruction runs all tests in genomics benchmark
-./run_toleo_sim.py native --bench bsw-s # run bsw-s benchmark
+./run_toleo_sim.py native --bench genomicsbench # runs all tests in genomicsbench
+./run_toleo_sim.py native --bench bsw-s # runs only bsw-s
 ```
 The benchmark prints `PIN_START` and `PIN_END` in the terminal when it enters and leaves the region of interest (ROI). This indicates that PIN_HOOKs are properly inserted and our instrumentation tool can detect when the benchmark enters ROI. 
 
 It also reports basic information about the benchmark, e.g. CPU time, peak RSS size, Page Faults etc. 
 <details>
-<summary>Example output for bsw-s </summary>
+<summary>Example output for bsw-s native run </summary>
  
 ```
 toleo_root$ ./run_toleo_sim.py native --bench bsw-s
@@ -244,8 +255,8 @@ Arch: zen4_cxl
 </details>
 
 
-### (optional) Test instrumentation
-We can test the benchmark instrumentation via intel sde tool (pinplay). 
+### (optional) Instrumented Run
+We then test if the benchmarks are properly instrumented by pinplay tools. 
 
 > TODO: Add instructions for installing Intel SDE tools. 
 
@@ -253,10 +264,13 @@ We can test the benchmark instrumentation via intel sde tool (pinplay).
 ./run_toleo_sim.py region --bench bsw-s # run bsw-s benchmark
 ```
 The program will print how many instructions are executed at warmup start, sim start, and sim end in the terminal. More control information can be found in folder `<path_to_benchmark>/region`. 
-### Run simulation 
-Run simulations on different architectural configs (no-protection, CI, toleo & invisimem) to generate performance metrics (runtime, cache hit rates, memory latency, and memory bandwidth utilization etc. ) and Trip format stats. 
 
-Use the `run_toleo_sim.py` script to start a simulation. Simluation for each benchmark takes hours - days, therefore we suggest starting with the `sim_test` suite (`bsw-s` from genomicsbench, and `pr-kron-s` from gapbs. Both should simulate in less than 30 minutes).
+
+### Run simulation 
+Now that we have verified our benchmarks are running properly natively and with pinplay tools, we can simulate them with the sniper-toleo simluation on different arhictectural configurations. 
+In particular, we provide configurations to simulation our 4 evaluation setups (no-protection, CI, toleo & invisimem) and generate performance metrics (runtime, cache hit rates, memory latency, and memory bandwidth utilization etc. ). We also provide a light-weighted no_dramsim configuration to run long simulations and generate Trip format stats. 
+
+Each Simluation takes hours - days, therefore we suggest starting with the `sim_test` suite (`bsw-s` from genomicsbench, and `pr-kron-s` from gapbs. Both should simulate in less than 30 minutes).
 
 **No protection. baseline of performance overheads** 
 
@@ -300,8 +314,15 @@ cd ..
 toleo_sim.py sniper --bench bsw-s --arch zen4_cxl_invisimem -a
 ```
 
+
+**NoDramsim**
+This is a light weighted configuration for running long simulations of the Trip format. This configuration runs without DRAMsim3 simulator and doesn't generate accurate performance metrics. However, its Trip format stats are accurate. 
+```
+./run_toleo_sim.py sniper --bench bsw-s --arch zen4_no_dramsim -a
+```
+
 ### Simulation Results
-Simulation results can be found in each benchmark binary location, under a fold named `sim-<date:time>-<arch>/<region>`. For example, `toleo_root/genomicsbench/bsw-s/sim-2024-06-05_04:51:28-zen4_vn/r2-t32` is the result path for `bsw-s` simulation. In this output directory, you'll find performance stats in `sim.out` and toleo stats in `dram_trace_analysis.csv`. 
+Simulation results can be found in each benchmark binary location, under a fold named `sim-<date:time>-<arch>/<region>`. For example, `toleo_root/genomicsbench/bsw-s/sim-2024-06-05_04:51:28-zen4_vn/r2-t32` is the result path for `bsw-s` simulation. In this output directory, you'll find performance stats in `sim.out` and Trip format stats in `dram_trace_analysis.csv`. 
 
 `dram_trace_analysis.csv` contains information about how many pages the program accessed and in what format it is stored on Toleo. Toleo usage can thus be calcualted from this csv form. 
 ```
